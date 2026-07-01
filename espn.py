@@ -375,6 +375,13 @@ class Match:
         return self.status_name == "STATUS_FINAL_PEN" or (
             self.home and self.home.shootout is not None)
 
+    @property
+    def has_extra_time(self):
+        """True if the match went beyond the two regular halves (extra time)."""
+        if "AET" in self.status_name or "EXTRA" in self.status_name:
+            return True
+        return bool(self.period and self.period > 2)
+
     def signature(self):
         """A value that changes when the visible state changes (for goal flash)."""
         h = self.home.score if self.home else "?"
