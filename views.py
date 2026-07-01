@@ -391,8 +391,6 @@ def draw_match_card(cv, r, c, width, m, selected, frame):
     if selected:
         border = fg(*P.gold) + BOLD
     fillstyle = bg(*(P.bg2 if selected else P.bg1))
-    cv.box(r, c, h, width, style=border, chars=LIGHT, fillstyle=fillstyle)
-
     # title: round · venue (left), status (right)
     rnd = espn.ROUND_LABEL.get(m.season_slug, m.season_slug.replace("-", " ").title())
     venue = m.venue or ""
@@ -400,13 +398,12 @@ def draw_match_card(cv, r, c, width, m, selected, frame):
     if venue:
         title += f" · {venue}"
     title += " "
-    cv.put(r, c + 2, term.strip_ansi(term.truncate(title, width - 18)),
-           fillstyle + fg(*P.dim))
     stxt, sstyle = status_text(m, frame)
-    cv.put(r, c + width - term.display_width(stxt) - 2, stxt, fillstyle + sstyle)
-    if selected:
-        cv.put(r + 1, c, "▸", fg(*P.gold) + BOLD)
-        cv.put(r + 2, c, "▸", fg(*P.gold) + BOLD)
+    widgets.draw_card(cv, r, c, h, width, border_style=border,
+                      fill_style=fillstyle, chars=LIGHT,
+                      title=title, title_style=fillstyle + fg(*P.dim),
+                      right=stxt, right_style=fillstyle + sstyle,
+                      selected=selected, select_style=fg(*P.gold) + BOLD)
 
     # two team rows: away then home
     for i, comp in enumerate((m.away, m.home)):
@@ -587,16 +584,12 @@ def view_groups(cv, top, bottom, cols, st, frame):
 
 
 def draw_group_table(cv, r, c, w, g):
-    cv.put(r, c, g.name, fg(*P.gold) + BOLD)
-    cv.hline(r, c + term.display_width(g.name) + 1, max(0, w - term.display_width(g.name) - 1),
-             fg(*P.line), "─")
-    cv.put(r + 1, c + 1, "#", fg(*P.faint))
-    cv.put(r + 1, c + 4, "Team", fg(*P.faint))
-    cv.put(r + 1, c + w - 13, "Pl", fg(*P.faint))
-    cv.put(r + 1, c + w - 9, "GD", fg(*P.faint))
-    cv.put(r + 1, c + w - 4, "Pts", fg(*P.faint))
+    # column layout: rank / header-# / swatch / flex team / Pl / GD / Pts
+    cols_spec = [("", 1, "left"), ("#", 1, "left"), ("", 2, "left"),
+                 ("Team", -1, "left"), ("Pl", 4, "left"),
+                 ("GD", 5, "left"), ("Pts", 4, "left")]
+    rows = []
     for i, row in enumerate(g.rows[:4]):
-        rr = r + 2 + i
         rank = row.rank or (i + 1)
         if row.qual_color:
             qrgb = term.hex_rgb(row.qual_color) or P.dim
@@ -612,13 +605,19 @@ def draw_group_table(cv, r, c, w, g):
             namecol = fg(*P.dim)
         else:
             namecol = fg(*P.text)
-        cv.put(rr, c, str(rank), fg(*qrgb) + BOLD)
-        cv.put(rr, c + 2, "▌", fg_hex(team_hex(row.id, row.abbr)))
         label = f"{row.abbr} {row.name}"
-        cv.put(rr, c + 4, term.strip_ansi(term.truncate(label, w - 18)), namecol)
-        cv.put(rr, c + w - 13, f"{row.gp:>2}", fg(*P.dim))
-        cv.put(rr, c + w - 9, term.pad(str(row.gd_disp), 3, "right"), fg(*P.text))
-        cv.put(rr, c + w - 4, term.pad(str(row.pts), 3, "right"), fg(*P.gold) + BOLD)
+        rows.append([
+            (str(rank), fg(*qrgb) + BOLD),
+            None,
+            ("▌", fg_hex(team_hex(row.id, row.abbr))),
+            (term.strip_ansi(term.truncate(label, w - 18)), namecol),
+            (f"{row.gp:>2}", fg(*P.dim)),
+            (term.pad(str(row.gd_disp), 3, "right"), fg(*P.text)),
+            (term.pad(str(row.pts), 3, "right"), fg(*P.gold) + BOLD),
+        ])
+    widgets.draw_table(cv, r, c, w, cols_spec, rows,
+                       title=g.name, title_style=fg(*P.gold) + BOLD,
+                       rule_style=fg(*P.line), header_style=fg(*P.faint))
 
 
 def view_bracket(cv, top, bottom, cols, st, frame):

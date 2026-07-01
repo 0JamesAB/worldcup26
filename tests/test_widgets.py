@@ -83,6 +83,74 @@ class TestSplitFracs(unittest.TestCase):
         self.assertEqual(widgets.split_fracs(0, 0), (0.0, 0.0))
 
 
+class TestDrawTable(unittest.TestCase):
+    SPEC = [("#", 2, "left"), ("Name", -1, "left"), ("Pts", 4, "right")]
+
+    def test_layout_and_row_count(self):
+        cv = Canvas(20, 5)
+        rows = [[("1", "S"), ("Alpha", "S"), ("10", "S")],
+                [("2", "S"), ("Beta", "S"), ("7", "S")]]
+        used = widgets.draw_table(cv, 0, 0, 20, self.SPEC, rows,
+                                  title="T", title_style="TS")
+        self.assertEqual(used, 4)  # title + header + 2 rows
+        self.assertEqual(row_text(cv, 0)[:1], "T")
+        self.assertIn("─", row_text(cv, 0))          # rule after title
+        self.assertIn("Name", row_text(cv, 1))
+        self.assertEqual(row_text(cv, 1)[16:20], " Pts")  # right-aligned hdr
+        self.assertEqual(row_text(cv, 2)[0], "1")
+        self.assertIn("Alpha", row_text(cv, 2))
+        self.assertEqual(row_text(cv, 2)[16:20], "  10")  # right-aligned cell
+
+    def test_no_title_no_header(self):
+        cv = Canvas(20, 3)
+        spec = [("", 2, "left"), ("", -1, "left")]
+        used = widgets.draw_table(cv, 0, 0, 20, spec, [[("x", ""), ("y", "")]])
+        self.assertEqual(used, 1)  # data row only
+        self.assertEqual(cv.grid[0][0].ch, "x")
+
+    def test_flex_cell_truncated(self):
+        cv = Canvas(14, 2)
+        rows = [[("1", ""), ("a-very-long-name", ""), ("9", "")]]
+        widgets.draw_table(cv, 0, 0, 14, self.SPEC, rows)
+        body = row_text(cv, 1)
+        self.assertIn("…", body)
+        self.assertNotIn("long-name", body)
+
+    def test_none_cell_skipped(self):
+        cv = Canvas(20, 2)
+        widgets.draw_table(cv, 0, 0, 20, self.SPEC,
+                           [[None, ("only", ""), None]])
+        self.assertEqual(cv.grid[1][0].ch, " ")
+        self.assertIn("only", row_text(cv, 1))
+
+
+class TestDrawCard(unittest.TestCase):
+    def test_frame_title_right_and_inner(self):
+        from tui.canvas import LIGHT
+        cv = Canvas(30, 4)
+        inner = widgets.draw_card(cv, 0, 0, 4, 30, title=" T ", right="FT")
+        self.assertEqual(inner, (1, 2, 26))
+        self.assertEqual(cv.grid[0][0].ch, LIGHT["tl"])
+        self.assertEqual(cv.grid[0][29].ch, LIGHT["tr"])
+        self.assertEqual(cv.grid[0][3].ch, "T")
+        row = row_text(cv, 0)
+        self.assertIn("FT", row)
+        self.assertEqual(row.index("FT"), 30 - 2 - 2)  # right-aligned - 2
+
+    def test_selection_chevrons(self):
+        cv = Canvas(30, 4)
+        widgets.draw_card(cv, 0, 0, 4, 30, selected=True, select_style="G")
+        self.assertEqual(cv.grid[1][0].ch, "▸")
+        self.assertEqual(cv.grid[2][0].ch, "▸")
+
+    def test_title_truncated_clear_of_right(self):
+        cv = Canvas(30, 4)
+        widgets.draw_card(cv, 0, 0, 4, 30, title="x" * 40, right="LIVE")
+        # title is truncated to w - title_reserve = 12 cols from c+2
+        self.assertNotIn("x", row_text(cv, 0)[2 + 12:])
+        self.assertIn("LIVE", row_text(cv, 0))
+
+
 class TestDrawDuelRow(unittest.TestCase):
     def test_layout(self):
         cv = Canvas(40, 2)

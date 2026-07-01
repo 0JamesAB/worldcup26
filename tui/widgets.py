@@ -7,6 +7,7 @@ purely geometric helpers take explicit style strings instead.
 """
 
 from . import term
+from .canvas import LIGHT
 from .term import BOLD, fg, bg
 from .theme import get_theme
 
@@ -120,6 +121,81 @@ def split_fracs(a, b):
     if tot <= 0:
         return 0.0, 0.0
     return fa / tot, fb / tot
+
+
+def draw_table(cv, r, c, w, cols_spec, rows, title="", title_style="",
+               rule_style="", header_style=""):
+    """Compact table.
+
+    cols_spec: [(header, width, align)]; width=-1 marks the one flex column
+               absorbing leftover width; align is 'left' or 'right'.
+    rows:      list of rows; each row is [(text, style), ...] matching
+               cols_spec (None cells are skipped).
+
+    Renders an optional `title` + horizontal rule, then the header row
+    (skipped when no column has a header), then the data rows. Cells wider
+    than their column are truncated. Returns rows consumed.
+    """
+    rr = r
+    if title:
+        cv.put(rr, c, title, title_style)
+        tw = term.display_width(title)
+        cv.hline(rr, c + tw + 1, max(0, w - tw - 1), rule_style, "─")
+        rr += 1
+    fixed = sum(cw for _, cw, _ in cols_spec if cw >= 0)
+    flexw = max(0, w - fixed)
+    xs = []
+    x = c
+    for _, cw, _ in cols_spec:
+        xs.append(x)
+        x += flexw if cw < 0 else cw
+
+    def cell_text(text, cw, align):
+        text = str(text)
+        width_here = flexw if cw < 0 else cw
+        if term.display_width(text) > width_here:
+            text = term.strip_ansi(term.truncate(text, width_here))
+        if align == "right":
+            text = term.pad(text, width_here, "right")
+        return text
+
+    if any(h for h, _, _ in cols_spec):
+        for (hdr, cw, align), cx in zip(cols_spec, xs):
+            if hdr:
+                cv.put(rr, cx, cell_text(hdr, cw, align), header_style)
+        rr += 1
+    for row in rows:
+        for (hdr, cw, align), cx, cell in zip(cols_spec, xs, row):
+            if cell is None:
+                continue
+            text, style = cell
+            cv.put(rr, cx, cell_text(text, cw, align), style)
+        rr += 1
+    return rr - r
+
+
+def draw_card(cv, r, c, h, w, border_style="", fill_style="", chars=None,
+              title="", title_style="", right="", right_style="",
+              title_reserve=18, selected=False, select_style="",
+              select_ch="▸"):
+    """Card frame: box + left title + right-aligned text on the top border,
+    plus selection chevrons in the border column when `selected`.
+
+    `title` is truncated to keep clear of `right` (title_reserve columns).
+    Returns (r + 1, c + 2, w - 4): the inner content origin and width.
+    """
+    cv.box(r, c, h, w, style=border_style, chars=chars or LIGHT,
+           fillstyle=fill_style)
+    if title:
+        cv.put(r, c + 2,
+               term.strip_ansi(term.truncate(title, w - title_reserve)),
+               title_style)
+    if right:
+        cv.put(r, c + w - term.display_width(right) - 2, right, right_style)
+    if selected:
+        cv.put(r + 1, c, select_ch, select_style)
+        cv.put(r + 2, c, select_ch, select_style)
+    return r + 1, c + 2, w - 4
 
 
 def draw_duel_row(cv, r, c, width, label, lval, rval, lstyle, rstyle,
