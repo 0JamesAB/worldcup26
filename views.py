@@ -576,11 +576,17 @@ def _feeder_index(comp, prev_matches):
 
 
 def _bracket_model(br):
-    """(numbered, feeders): matches per round ordered by canonical number
-    (ascending event id), and feeders[(slug,i)] = (away_idx, home_idx)."""
+    """(numbered, feeders): matches per round ordered by canonical match number
+    and feeders[(slug,i)] = (away_idx, home_idx).
+
+    The match number (used by "Round of 32 N Winner" placeholders) follows the
+    kickoff schedule, not ESPN's internal event id — so index i here is match
+    N=i+1. Sort by (date, id) so the id only breaks exact-time ties stably.
+    """
     numbered = {
         slug: sorted(br.get(slug, []),
-                     key=lambda m: int(m.id) if str(m.id).isdigit() else 1 << 30)
+                     key=lambda m: (m.date or _FAR,
+                                    int(m.id) if str(m.id).isdigit() else 1 << 30))
         for slug in KO_ORDER
     }
     feeders = {}
@@ -692,8 +698,8 @@ def draw_connector(cv, c1, c2, cc, prev_right, gx, next_left):
         cv.put(y, gx, "│", col)
     cv.put(lo, gx, "╮", col)
     cv.put(hi, gx, "╯", col)
-    # branch out to the parent
-    cv.put(cc, gx, "┤" if lo < cc < hi else "├", col)
+    # branch out to the parent (rightward), so the spine tee must open right
+    cv.put(cc, gx, "├", col)
     for x in range(gx + 1, next_left):
         cv.put(cc, x, "─", col)
 
@@ -769,11 +775,11 @@ def view_scorers(cv, top, bottom, cols, st, frame):
         cv.put(r, 7, "●", bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
         cv.put(r, 9, term.pad(row["name"], 24), bgs + fg(*P.text) + (BOLD if i < 3 else ""))
         cv.put(r, 34, term.pad(row.get("team_abbr", ""), 5), bgs + fg(*P.dim))
-        # bar
+        # bar — value sits right after the bar's fill so it tracks the bar length
         filln = int(round(row["value"] / maxval * barmax))
         bx = 40
         cv.put(r, bx, "█" * filln, bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
-        cv.put(r, bx + barmax + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
+        cv.put(r, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
         r += 1
 
 

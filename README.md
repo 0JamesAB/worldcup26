@@ -30,8 +30,8 @@ survive a plain-text paste — run it to see them.)*
 ## Install
 
 ```sh
-git clone https://github.com/<you>/world-cup-terminal.git
-cd world-cup-terminal
+git clone https://github.com/0JamesAB/worldcup26.git
+cd worldcup26
 ./install.sh
 ```
 
