@@ -113,7 +113,7 @@ away), sized by the market's implied chance and coloured by team:
   to configure and nothing breaks when they're absent.
 * **In the Match Centre**, a compact moneyline strip sits under the score on
   every tab, and a fuller panel (with over/under and spread) fills the Lineups
-  tab until the teamsheets drop ~1h before kick-off.
+  tab until the teamsheets drop ~1h before kickoff.
 
 **Tuning** (both optional):
 

@@ -111,8 +111,8 @@ def team_goals_text(m, comp, maxw):
 
 def odds_enabled():
     """Odds show by default; WCUP_ODDS=off|0|false|no|hide hides them."""
-    return os.environ.get("WCUP_ODDS", "").strip().lower() not in \
-        ("0", "off", "false", "no", "hide")
+    return (os.environ.get("WCUP_ODDS", "").strip().lower()
+            not in ("0", "off", "false", "no", "hide"))
 
 
 def _odds_format():
@@ -220,7 +220,7 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
         extras.append(sp)
     if extras:
         cv.put(r + 1, cx, "     ".join(extras), fg(*P.dim))
-    cv.put(r + 2, cx, "Lineups drop ~1h before kick-off.", fg(*P.faint) + ITALIC)
+    cv.put(r + 2, cx, "Lineups drop ~1h before kickoff.", fg(*P.faint) + ITALIC)
 
 
 # ----------------------------------------------------------------------------
@@ -527,10 +527,10 @@ def view_live(cv, top, bottom, cols, st, frame):
     # advancing the start index until the selected card fits on screen.
     avail = bottom - top + 1
     start = 0
-    while start < st.live_sel:
-        used = sum(card_rows(matches[k]) for k in range(start, st.live_sel + 1))
-        if used <= avail:
-            break
+    # advance `start` until the run start..sel fits; keep the running sum O(n)
+    used = sum(card_rows(matches[k]) for k in range(st.live_sel + 1))
+    while start < st.live_sel and used > avail:
+        used -= card_rows(matches[start])
         start += 1
     r = top
     shown = 0
