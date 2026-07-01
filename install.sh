@@ -24,8 +24,8 @@ bold "Installing wcup — FIFA World Cup 2026 terminal dashboard"
 # --- locate a suitable python3 ---
 PY="$(command -v python3 || true)"
 [ -n "$PY" ] || die "Python 3 is required, but 'python3' was not found on your PATH."
-"$PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 7) else 1)' \
-  || die "Python 3.7+ is required (found $("$PY" -V 2>&1))."
+"$PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)' \
+  || die "Python 3.8+ is required (found $("$PY" -V 2>&1))."
 
 echo "  repo:   $REPO_DIR"
 echo "  python: $PY ($("$PY" -V 2>&1))"

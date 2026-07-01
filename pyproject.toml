@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tui-core"
+version = "0.1.0"
+description = "Zero-dependency POSIX terminal UI toolkit: truecolor ANSI with 256/16 fallback, raw keyboard input, diff-based renderer, styled canvas, and widgets."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+authors = [{ name = "James Butler", email = "james@butler.fyi" }]
+classifiers = [
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX",
+  "Programming Language :: Python :: 3",
+]
+
+[tool.setuptools]
+# Explicit: only the library ships; the World Cup app modules
+# (wc/views/state/espn/palette) stay repo-local.
+packages = ["tui"]

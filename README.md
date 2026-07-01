@@ -28,7 +28,7 @@ nothing to pip-install. Already had a terminal open? Run `hash -r` so it's found
 
 Prefer not to install? Just run it in place: `python3 wc.py`.
 
-Requirements: Python 3.7+ and a real terminal (truecolor auto-detected, degrades to
+Requirements: Python 3.8+ and a real terminal (truecolor auto-detected, degrades to
 256/16 colours). Make the window ≥ 100 cols wide for the bracket and lineups.
 
 To remove: `./uninstall.sh`.
