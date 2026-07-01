@@ -365,3 +365,87 @@ def draw_connector(cv, c1, c2, cc, prev_right, gx, next_left, style=""):
     cv.put(cc, gx, "├", style)
     for x in range(gx + 1, next_left):
         cv.put(cc, x, "─", style)
+
+
+# ----------------------------------------------------------------------------
+# Small widgets: sparkline, spinner, progress, badge, rule
+# ----------------------------------------------------------------------------
+
+SPARK_CHARS = "▁▂▃▄▅▆▇█"
+
+SPINNER_DOTS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+SPINNER_LINE = "|/-\\"
+
+
+def sparkline(values, lo=None, hi=None):
+    """Map `values` to the 8 spark block chars scaled over [lo, hi].
+
+    lo/hi default to min(values)/max(values); values clamp into range.
+    Empty values -> ""; flat series (hi == lo) -> "▄" for every value.
+    """
+    if not values:
+        return ""
+    if lo is None:
+        lo = min(values)
+    if hi is None:
+        hi = max(values)
+    if hi == lo:
+        return SPARK_CHARS[3] * len(values)
+    span = hi - lo
+    out = []
+    for v in values:
+        f = (v - lo) / span
+        f = 0.0 if f < 0 else 1.0 if f > 1 else f
+        out.append(SPARK_CHARS[min(7, int(f * 8))])
+    return "".join(out)
+
+
+def draw_sparkline(cv, r, c, values, style="", lo=None, hi=None):
+    """Put a sparkline at (r, c). Returns the end column."""
+    return cv.put(r, c, sparkline(values, lo, hi), style)
+
+
+def spinner(frame, frames=SPINNER_DOTS):
+    """Single spinner char cycling by `frame` index."""
+    return frames[frame % len(frames)]
+
+
+def draw_progress(cv, r, c, width, frac, fill_style, track_style=None,
+                  show_pct=False, pct_style=""):
+    """Progress bar built on draw_hbar.
+
+    `frac` is clamped into [0, 1]. When show_pct, the bar occupies
+    width-5 cells and the percentage is right-aligned in the last 4
+    cells ("nnn%"), one space between bar and pct; if width < 5 the pct
+    does not fit and is omitted, so nothing is ever drawn outside
+    `width`. Returns the fill cell count.
+    """
+    frac = 0.0 if frac < 0 else 1.0 if frac > 1 else frac
+    barw = max(0, width - 5) if show_pct else width
+    fill = draw_hbar(cv, r, c, barw, frac, fill_style, track_style)
+    if show_pct and width >= 5:
+        pct = term.pad(str(int(round(frac * 100))), 3, "right") + "%"
+        cv.put(r, c + barw + 1, pct, pct_style)
+    return fill
+
+
+def draw_badge(cv, r, c, text, style):
+    """Put ' text ' (single-space padding) in `style`. Returns end column."""
+    return cv.put(r, c, " " + text + " ", style)
+
+
+def draw_rule(cv, r, c, width, title="", style="", title_style=None, ch="─"):
+    """Horizontal rule; optional ' title ' overlaid centered on the rule.
+
+    title_style defaults to `style`; a title wider than `width` is
+    truncated via term.truncate. width <= 0 draws nothing.
+    """
+    if width <= 0:
+        return
+    cv.hline(r, c, width, style, ch)
+    if title:
+        t = " " + title + " "
+        if term.display_width(t) > width:
+            t = term.strip_ansi(term.truncate(t, width))
+        tx = c + max(0, (width - term.display_width(t)) // 2)
+        cv.put(r, tx, t, style if title_style is None else title_style)

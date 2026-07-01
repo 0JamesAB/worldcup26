@@ -251,5 +251,144 @@ class TestDrawConnector(unittest.TestCase):
         self.assertEqual(cv.grid[4][11].ch, "─")  # branch to parent
 
 
+class TestSparkline(unittest.TestCase):
+    def test_scaling_exact(self):
+        self.assertEqual(widgets.sparkline(list(range(8)), lo=0, hi=7),
+                         widgets.SPARK_CHARS)
+
+    def test_default_range_from_values(self):
+        self.assertEqual(widgets.sparkline([0, 7]), "\u2581\u2588")
+
+    def test_flat_series(self):
+        self.assertEqual(widgets.sparkline([5, 5, 5]), "\u2584" * 3)
+
+    def test_clamping(self):
+        self.assertEqual(widgets.sparkline([-10, 100], lo=0, hi=7),
+                         "\u2581\u2588")
+
+    def test_empty(self):
+        self.assertEqual(widgets.sparkline([]), "")
+
+
+class TestDrawSparkline(unittest.TestCase):
+    def test_puts_and_returns_end_col(self):
+        cv = Canvas(10, 1)
+        end = widgets.draw_sparkline(cv, 0, 2, [0, 3.5, 7], "S", lo=0, hi=7)
+        self.assertEqual(end, 5)
+        self.assertEqual(row_text(cv, 0)[2:5], "\u2581\u2585\u2588")
+        self.assertEqual(cv.grid[0][2].style, "S")
+
+
+class TestSpinner(unittest.TestCase):
+    def test_cycles_and_wraps(self):
+        n = len(widgets.SPINNER_DOTS)
+        self.assertEqual(widgets.spinner(0), widgets.SPINNER_DOTS[0])
+        self.assertEqual(widgets.spinner(3), widgets.SPINNER_DOTS[3])
+        self.assertEqual(widgets.spinner(n), widgets.SPINNER_DOTS[0])
+        self.assertEqual(widgets.spinner(n + 2), widgets.SPINNER_DOTS[2])
+
+    def test_alternate_frames(self):
+        self.assertEqual(widgets.spinner(3, widgets.SPINNER_LINE), "\\")
+        self.assertEqual(widgets.spinner(4, widgets.SPINNER_LINE), "|")
+
+
+class TestDrawProgress(unittest.TestCase):
+    def test_without_pct_full_width(self):
+        cv = Canvas(10, 1)
+        n = widgets.draw_progress(cv, 0, 0, 10, 0.5, "F", "T")
+        self.assertEqual(n, 5)
+        self.assertEqual(row_text(cv, 0), "\u2588" * 5 + "\u2591" * 5)
+
+    def test_with_pct_geometry(self):
+        cv = Canvas(15, 1)
+        n = widgets.draw_progress(cv, 0, 0, 15, 0.5, "F", "T",
+                                  show_pct=True, pct_style="P")
+        self.assertEqual(n, 5)  # bar is width-5 = 10 wide, half filled
+        row = row_text(cv, 0)
+        self.assertEqual(row[:10], "\u2588" * 5 + "\u2591" * 5)
+        self.assertEqual(row[10], " ")           # gap between bar and pct
+        self.assertEqual(row[11:15], " 50%")     # right-aligned in last 4
+        self.assertEqual(cv.grid[0][14].style, "P")
+
+    def test_pct_full(self):
+        cv = Canvas(12, 1)
+        widgets.draw_progress(cv, 0, 0, 12, 1.0, "F", show_pct=True)
+        self.assertEqual(row_text(cv, 0)[8:12], "100%")
+
+    def test_pct_zero(self):
+        cv = Canvas(12, 1)
+        n = widgets.draw_progress(cv, 0, 0, 12, 0.0, "F", "T", show_pct=True)
+        self.assertEqual(n, 0)
+        self.assertEqual(row_text(cv, 0)[8:12], "  0%")
+
+    def test_narrow_width_stays_inside_budget(self):
+        # width < 5 leaves no room for the pct: nothing may be drawn
+        # past c + width.
+        cv = Canvas(10, 1)
+        cv.put(0, 3, "XXXX", "N")  # neighbors just past the 3-wide budget
+        widgets.draw_progress(cv, 0, 0, 3, 0.5, "F", show_pct=True)
+        self.assertEqual(row_text(cv, 0)[3:7], "XXXX")
+
+    def test_frac_clamped(self):
+        cv = Canvas(12, 1)
+        widgets.draw_progress(cv, 0, 0, 12, 25.0, "F", show_pct=True)
+        self.assertEqual(row_text(cv, 0)[8:12], "100%")  # not "2500%"
+        cv2 = Canvas(12, 1)
+        widgets.draw_progress(cv2, 0, 0, 12, -3.0, "F", "T", show_pct=True)
+        self.assertEqual(row_text(cv2, 0)[8:12], "  0%")
+
+
+class TestDrawBadge(unittest.TestCase):
+    def test_padding_and_return_col(self):
+        cv = Canvas(10, 1)
+        end = widgets.draw_badge(cv, 0, 1, "OK", "S")
+        self.assertEqual(end, 5)
+        self.assertEqual(row_text(cv, 0)[1:5], " OK ")
+        for x in range(1, 5):
+            self.assertEqual(cv.grid[0][x].style, "S")
+
+
+class TestDrawRule(unittest.TestCase):
+    def test_plain_rule(self):
+        cv = Canvas(12, 1)
+        widgets.draw_rule(cv, 0, 1, 10, style="S")
+        self.assertEqual(row_text(cv, 0)[1:11], "\u2500" * 10)
+        self.assertEqual(cv.grid[0][0].ch, " ")
+        self.assertEqual(cv.grid[0][11].ch, " ")
+
+    def test_title_centered(self):
+        cv = Canvas(20, 1)
+        widgets.draw_rule(cv, 0, 0, 20, title="Hi", style="S")
+        row = row_text(cv, 0)
+        # " Hi " (4 wide) centered: starts at (20 - 4) // 2 = 8
+        self.assertEqual(row[8:12], " Hi ")
+        self.assertEqual(row[:8], "\u2500" * 8)
+        self.assertEqual(row[12:20], "\u2500" * 8)
+
+    def test_title_style_defaults_to_style(self):
+        cv = Canvas(20, 1)
+        widgets.draw_rule(cv, 0, 0, 20, title="Hi", style="S")
+        self.assertEqual(cv.grid[0][9].style, "S")
+        cv2 = Canvas(20, 1)
+        widgets.draw_rule(cv2, 0, 0, 20, title="Hi", style="S",
+                          title_style="TS")
+        self.assertEqual(cv2.grid[0][9].style, "TS")
+        self.assertEqual(cv2.grid[0][0].style, "S")
+
+    def test_title_wider_than_width_truncates(self):
+        cv = Canvas(8, 1)
+        widgets.draw_rule(cv, 0, 0, 6, title="abcdefghij")
+        row = row_text(cv, 0)
+        self.assertIn("\u2026", row[:6])
+        self.assertNotIn("f", row)
+        self.assertEqual(cv.grid[0][6].ch, " ")  # nothing past the rule
+
+    def test_zero_or_negative_width_draws_nothing(self):
+        cv = Canvas(8, 1)
+        widgets.draw_rule(cv, 0, 2, 0, title="hi")
+        widgets.draw_rule(cv, 0, 2, -3, title="hi")
+        self.assertEqual(row_text(cv, 0), " " * 8)
+
+
 if __name__ == "__main__":
     unittest.main()

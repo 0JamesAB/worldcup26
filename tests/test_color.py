@@ -41,9 +41,25 @@ class TestFgBgByDepth(DepthCase):
         term.set_color_depth("256")
         self.assertEqual(term.fg(255, 0, 0), f"\x1b[38;5;{16 + 36 * 5}m")
 
-    def test_16_returns_empty(self):
-        # Documented quirk: depth 16 emits no color codes at all.
+    def test_16_nearest_primaries(self):
         term.set_color_depth("16")
+        # Pure red/green are nearest the bright variants (255-based),
+        # pure blue is nearest the normal blue (0,0,238).
+        self.assertEqual(term.fg(255, 0, 0), "\x1b[91m")
+        self.assertEqual(term.fg(0, 255, 0), "\x1b[92m")
+        self.assertEqual(term.fg(0, 0, 255), "\x1b[34m")
+        self.assertEqual(term.bg(255, 0, 0), "\x1b[101m")
+        self.assertEqual(term.bg(0, 0, 255), "\x1b[44m")
+
+    def test_16_black_and_white(self):
+        term.set_color_depth("16")
+        self.assertEqual(term.fg(0, 0, 0), "\x1b[30m")
+        self.assertEqual(term.fg(255, 255, 255), "\x1b[97m")
+        self.assertEqual(term.bg(0, 0, 0), "\x1b[40m")
+        self.assertEqual(term.bg(255, 255, 255), "\x1b[107m")
+
+    def test_mono_returns_empty(self):
+        term.set_color_depth("mono")
         self.assertEqual(term.fg(255, 0, 0), "")
         self.assertEqual(term.bg(255, 0, 0), "")
 
@@ -80,8 +96,20 @@ class TestHexRgb(unittest.TestCase):
 
 
 class TestDetection(unittest.TestCase):
-    def test_no_color_forces_16(self):
+    def test_no_color_forces_mono(self):
         with mock.patch.dict(os.environ, {"NO_COLOR": "1"}):
+            self.assertEqual(term._detect_color_depth(), "mono")
+
+    def test_dumb_term_is_mono(self):
+        with mock.patch.dict(os.environ, {"TERM": "dumb"}, clear=True):
+            self.assertEqual(term._detect_color_depth(), "mono")
+
+    def test_linux_console_is_16(self):
+        with mock.patch.dict(os.environ, {"TERM": "linux"}, clear=True):
+            self.assertEqual(term._detect_color_depth(), "16")
+
+    def test_vt_term_is_16(self):
+        with mock.patch.dict(os.environ, {"TERM": "vt100"}, clear=True):
             self.assertEqual(term._detect_color_depth(), "16")
 
     def test_colorterm_truecolor(self):

@@ -2,7 +2,10 @@
 term.py - Terminal control layer.
 
 Pure stdlib. Provides:
-  - ANSI truecolor + style helpers (with graceful 256/16-color downgrade)
+  - ANSI truecolor + style helpers (graceful 256/16-color/mono downgrade;
+    'mono' is the no-color tier — NO_COLOR or TERM=dumb — where fg()/bg()
+    return ''. Note: in v0.1.0 depth '16' was the no-color tier; it now
+    emits real 16-color SGR codes.)
   - Alternate-screen / cursor / raw-input context manager
   - A non-blocking key reader that decodes escape sequences (arrows, etc.)
   - A diff-based line renderer so frames repaint without flicker
@@ -23,15 +26,17 @@ from dataclasses import dataclass
 # ----------------------------------------------------------------------------
 
 def _detect_color_depth():
-    """Return 'truecolor', '256', or '16'."""
-    if os.environ.get("NO_COLOR"):
-        return "16"
+    """Return 'truecolor', '256', '16', or 'mono'."""
+    term = os.environ.get("TERM", "")
+    if os.environ.get("NO_COLOR") or term == "dumb":
+        return "mono"
     ct = os.environ.get("COLORTERM", "").lower()
     if "truecolor" in ct or "24bit" in ct:
         return "truecolor"
-    term = os.environ.get("TERM", "")
     if "256" in term:
         return "256"
+    if term in ("linux", "ansi") or term.startswith("vt"):
+        return "16"
     # Most modern macOS/Linux terminals do truecolor; assume it unless told otherwise.
     return "truecolor"
 
@@ -43,9 +48,9 @@ def get_color_depth():
 
 
 def set_color_depth(depth):
-    """Override detection: 'truecolor', '256', or '16'."""
+    """Override detection: 'truecolor', '256', '16', or 'mono'."""
     global COLOR_DEPTH
-    if depth not in ("truecolor", "256", "16"):
+    if depth not in ("truecolor", "256", "16", "mono"):
         raise ValueError(f"bad color depth: {depth!r}")
     COLOR_DEPTH = depth
 
@@ -76,13 +81,35 @@ def _rgb_to_256(r, g, b):
     return 16 + 36 * ri + 6 * gi + bi
 
 
+# Standard xterm palette for the 16 base colors.
+_XTERM_16 = (
+    (0, 0, 0), (205, 0, 0), (0, 205, 0), (205, 205, 0),
+    (0, 0, 238), (205, 0, 205), (0, 205, 205), (229, 229, 229),
+    (127, 127, 127), (255, 0, 0), (0, 255, 0), (255, 255, 0),
+    (92, 92, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
+)
+
+
+def _rgb_to_16(r, g, b):
+    """Nearest of the 16 standard xterm colors (index 0-15) by squared distance."""
+    best, best_d = 0, None
+    for i, (pr, pg, pb) in enumerate(_XTERM_16):
+        d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2
+        if best_d is None or d < best_d:
+            best, best_d = i, d
+    return best
+
+
 def fg(r, g, b):
     r, g, b = _clamp(r), _clamp(g), _clamp(b)
     if COLOR_DEPTH == "truecolor":
         return f"{CSI}38;2;{r};{g};{b}m"
     if COLOR_DEPTH == "256":
         return f"{CSI}38;5;{_rgb_to_256(r, g, b)}m"
-    return ""
+    if COLOR_DEPTH == "16":
+        i = _rgb_to_16(r, g, b)
+        return f"{CSI}{30 + i if i < 8 else 90 + (i - 8)}m"
+    return ""  # mono
 
 
 def bg(r, g, b):
@@ -91,7 +118,10 @@ def bg(r, g, b):
         return f"{CSI}48;2;{r};{g};{b}m"
     if COLOR_DEPTH == "256":
         return f"{CSI}48;5;{_rgb_to_256(r, g, b)}m"
-    return ""
+    if COLOR_DEPTH == "16":
+        i = _rgb_to_16(r, g, b)
+        return f"{CSI}{40 + i if i < 8 else 100 + (i - 8)}m"
+    return ""  # mono
 
 
 def hex_rgb(h):
@@ -241,6 +271,63 @@ def pad(s, width, align="left", fillchar=" "):
     return fillchar * left + s + fillchar * right
 
 
+def _hard_break(word, width, lines):
+    """Split `word` (ANSI-aware) at `width` columns, appending full chunks
+    to `lines`. Returns the (chunk, visible_width) remainder."""
+    piece = []
+    used = 0
+    i = 0
+    n = len(word)
+    while i < n:
+        if word[i] == "\x1b":
+            m = _SGR_RE.match(word, i)
+            if m:
+                piece.append(m.group())
+                i = m.end()
+                continue
+        w = char_width(word[i])
+        if used + w > width and used > 0:
+            # Only flush a piece that has visible content; a glyph wider
+            # than `width` itself must not leave a spurious blank line.
+            lines.append("".join(piece))
+            piece, used = [], 0
+        piece.append(word[i])
+        used += w
+        i += 1
+    return "".join(piece), used
+
+
+def wrap(s, width):
+    """ANSI-aware word wrap: split `s` on spaces into lines of at most
+    `width` visible columns. SGR codes are zero-width and stay attached to
+    their word; words longer than `width` are hard-broken. Returns a list
+    of lines with no trailing spaces. width <= 0 returns [s] unchanged."""
+    if width <= 0:
+        return [s]
+    lines = []
+    cur = ""
+    cur_w = 0
+    for word in s.split(" "):
+        w = display_width(word)
+        if w > width:
+            if cur:
+                lines.append(cur.rstrip(" "))
+            cur, cur_w = _hard_break(word, width, lines)
+            continue
+        if cur_w == 0:
+            # cur is empty or all zero-width SGR codes; glue the word on so
+            # a bare color code never strands alone on its own line.
+            cur, cur_w = cur + word, w
+        elif cur_w + 1 + w <= width:
+            cur = cur + " " + word
+            cur_w += 1 + w
+        else:
+            lines.append(cur.rstrip(" "))
+            cur, cur_w = word, w
+    lines.append(cur.rstrip(" "))
+    return lines
+
+
 # ----------------------------------------------------------------------------
 # Raw-input terminal context
 # ----------------------------------------------------------------------------
@@ -248,18 +335,23 @@ def pad(s, width, align="left", fillchar=" "):
 class RawTerminal:
     """Context manager: alt-screen + cbreak raw input + cursor hidden.
 
+    With mouse=True, enables SGR mouse reporting (press/release + drag).
     Restores the terminal on exit even if an exception propagates.
     """
 
-    def __init__(self):
+    def __init__(self, mouse=False):
         self.fd = sys.stdin.fileno()
         self.old = None
+        self.mouse = mouse
         self._resized = False
 
     def __enter__(self):
         self.old = termios.tcgetattr(self.fd)
         tty.setcbreak(self.fd)
         enter_alt_screen()
+        if self.mouse:
+            sys.stdout.write(f"{CSI}?1000;1002;1006h")
+            sys.stdout.flush()
         try:
             signal.signal(signal.SIGWINCH, self._on_resize)
         except (ValueError, OSError):
@@ -268,6 +360,9 @@ class RawTerminal:
 
     def __exit__(self, *exc):
         try:
+            if self.mouse:
+                sys.stdout.write(f"{CSI}?1006;1002;1000l")
+                sys.stdout.flush()
             exit_alt_screen()
         finally:
             if self.old is not None:
@@ -280,6 +375,22 @@ class RawTerminal:
     def take_resize(self):
         r, self._resized = self._resized, False
         return r
+
+
+class MouseEvent:
+    """A decoded SGR mouse report. row/col are 0-based."""
+
+    __slots__ = ("row", "col", "button", "kind")
+
+    def __init__(self, row, col, button, kind):
+        self.row = row
+        self.col = col
+        self.button = button
+        self.kind = kind
+
+    def __repr__(self):
+        return (f"MouseEvent(row={self.row}, col={self.col}, "
+                f"button={self.button!r}, kind={self.kind!r})")
 
 
 # Key constants returned by read_key
@@ -368,8 +479,29 @@ def read_key(timeout=0.2):
     return chr(b)
 
 
+def _decode_sgr_mouse(text):
+    """Decode an SGR mouse body like '<0;10;5M' into a MouseEvent."""
+    try:
+        btn, x, y = (int(p) for p in text[1:-1].split(";"))
+    except ValueError:
+        return None
+    final = text[-1]
+    if btn & 64:
+        button = "wheel_up" if btn & 1 == 0 else "wheel_down"
+        kind = "wheel"
+    else:
+        button = {0: "left", 1: "middle", 2: "right"}.get(btn & 3)
+        if btn & 32:
+            kind = "motion"
+        else:
+            kind = "press" if final == "M" else "release"
+    return MouseEvent(y - 1, x - 1, button, kind)
+
+
 def _decode_csi(intro, body):
     text = body.decode("latin-1", "replace")
+    if intro == b"[" and text.startswith("<") and text[-1:] in ("M", "m"):
+        return _decode_sgr_mouse(text)
     mapping_csi = {
         "A": Key.UP, "B": Key.DOWN, "C": Key.RIGHT, "D": Key.LEFT,
         "H": Key.HOME, "F": Key.END, "Z": Key.SHIFT_TAB,
@@ -398,11 +530,16 @@ class _Frame:
 
 
 class Renderer:
-    """Holds the previous frame and repaints only changed lines."""
+    """Holds the previous frame and repaints only changed lines.
 
-    def __init__(self):
+    With sync=True, updates are wrapped in the synchronized-output mode
+    (CSI ?2026) so the terminal presents each frame atomically.
+    """
+
+    def __init__(self, sync=True):
         self._prev = []
         self._size = (0, 0)
+        self._sync = sync
 
     def reset(self):
         """Force a full repaint on the next render (e.g. after resize)."""
@@ -426,6 +563,9 @@ class Renderer:
                 out.append(line)
                 out.append(clear_to_eol())
         if out:
-            sys.stdout.write("".join(out))
+            payload = "".join(out)
+            if self._sync:
+                payload = f"{CSI}?2026h{payload}{CSI}?2026l"
+            sys.stdout.write(payload)
             sys.stdout.flush()
         self._prev = frame

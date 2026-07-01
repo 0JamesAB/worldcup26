@@ -29,7 +29,8 @@ nothing to pip-install. Already had a terminal open? Run `hash -r` so it's found
 Prefer not to install? Just run it in place: `python3 wc.py`.
 
 Requirements: Python 3.8+ and a real terminal (truecolor auto-detected, degrades to
-256/16 colours). Make the window ≥ 100 cols wide for the bracket and lineups.
+256/16 colours, or plain monochrome under `NO_COLOR`/`TERM=dumb`). Make the window
+≥ 100 cols wide for the bracket and lineups.
 
 To remove: `./uninstall.sh`.
 
@@ -52,6 +53,14 @@ wcup --snapshot 120x40 bracket   # render one frame to stdout (no TTY) — good 
   <img src="assets/team.svg" alt="A nation's page — Brazil's World Cup results and upcoming fixtures" width="820">
   <br><sub><code>wcup --BRA</code> — a nation's results, record and next fixture.</sub>
 </p>
+
+---
+
+## The tui library
+
+The dashboard is built on `tui`, a zero-dependency POSIX terminal UI toolkit that ships in this repo: truecolor ANSI with 256/16-color/mono fallback, a styled cell-grid canvas, a diff-based renderer, flexbox-style layout, widgets, and a frame-loop runner. Install it with `pip install .` (package `tui-core`), or try the demo straight from a checkout with `python3 examples/dashboard.py`. Modules: `term`, `canvas`, `theme`, `styles`, `layout`, `interact`, `widgets`, `testing`, `app`.
+
+Color depths are `truecolor`, `256`, `16`, and `mono` (`set_color_depth` overrides detection). Note a behavior change from v0.1.0: depth `16` now emits real ANSI 16-color codes (SGR 30-37/90-97); the no-color tier — what `NO_COLOR` or `TERM=dumb` selects, where `fg()`/`bg()` return empty strings — is now called `mono`. Callers that used `set_color_depth("16")` to suppress color should use `set_color_depth("mono")` instead.
 
 ---
 
