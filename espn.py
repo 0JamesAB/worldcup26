@@ -199,6 +199,109 @@ class Goal:
         self.penalty = penalty
 
 
+# Betting odds ---------------------------------------------------------------
+#
+# ESPN's public scoreboard/summary feeds embed a sportsbook's odds (DraftKings
+# in the US) with no key required. We parse the 3-way moneyline (home/draw/away)
+# plus the spread and total, and derive vig-removed implied win probabilities.
+# Odds are simply absent for finished games and for fixtures not yet priced —
+# so the feature degrades to "nothing shown" with no special-casing.
+
+def parse_american(s):
+    """'+115'/'-120'/'EVEN'/225 -> signed int, or None if unparseable."""
+    if s is None:
+        return None
+    if isinstance(s, (int, float)):
+        return int(s)
+    t = str(s).strip().upper().replace("−", "-")  # normalize unicode minus
+    if t in ("EVEN", "EV", "PK", "PICK"):
+        return 100
+    try:
+        return int(t.replace("+", ""))
+    except ValueError:
+        return None
+
+
+def american_to_decimal(a):
+    """Signed American odds -> decimal odds (e.g. +115 -> 2.15, -120 -> 1.83)."""
+    if a is None:
+        return None
+    return 1 + (a / 100.0 if a > 0 else 100.0 / abs(a)) if a != 0 else None
+
+
+def american_to_prob(a):
+    """Signed American odds -> raw implied probability (still includes the vig)."""
+    if a is None:
+        return None
+    return 100.0 / (a + 100.0) if a > 0 else abs(a) / (abs(a) + 100.0)
+
+
+class Odds:
+    """Parsed sportsbook odds for one match (moneyline / spread / total)."""
+
+    def __init__(self, raw):
+        raw = raw or {}
+        self.provider = _g(raw, "provider", "name") or _g(raw, "provider", "displayName") or ""
+        self.details = raw.get("details") or ""
+
+        ml = raw.get("moneyline") or {}
+
+        def ml_side(key):
+            node = ml.get(key) or {}
+            return parse_american(_g(node, "close", "odds") or _g(node, "open", "odds"))
+
+        self.ml_home = ml_side("home")
+        self.ml_away = ml_side("away")
+        self.ml_draw = ml_side("draw")
+        if self.ml_draw is None:  # some feeds carry the draw only under drawOdds
+            self.ml_draw = parse_american(_g(raw, "drawOdds", "moneyLine"))
+
+        # total (over/under goals)
+        self.over_under = raw.get("overUnder")
+        tot = raw.get("total") or {}
+        self.over_odds = parse_american(
+            _g(tot, "over", "close", "odds") or _g(tot, "over", "open", "odds") or raw.get("overOdds"))
+        self.under_odds = parse_american(
+            _g(tot, "under", "close", "odds") or _g(tot, "under", "open", "odds") or raw.get("underOdds"))
+
+        # spread (Asian handicap) — home side's line, e.g. '-0.5'
+        sp = raw.get("pointSpread") or {}
+        self.spread_line = _g(sp, "home", "close", "line") or _g(sp, "home", "open", "line") \
+            or raw.get("spread")
+        self.spread_odds = parse_american(_g(sp, "home", "close", "odds") or _g(sp, "home", "open", "odds"))
+
+    @property
+    def has_moneyline(self):
+        return self.ml_home is not None and self.ml_away is not None
+
+    def probabilities(self):
+        """Vig-removed (home, draw, away) implied probabilities summing to 1.0.
+
+        Returns None if the moneyline is incomplete. A missing draw price
+        (two-way market) contributes 0 and the remaining two are normalized.
+        """
+        if not self.has_moneyline:
+            return None
+        raws = [american_to_prob(self.ml_home) or 0.0,
+                american_to_prob(self.ml_draw) or 0.0,
+                american_to_prob(self.ml_away) or 0.0]
+        total = sum(raws)
+        if total <= 0:
+            return None
+        return tuple(x / total for x in raws)
+
+
+def _parse_odds(odds_list):
+    """First entry with a usable moneyline from an ESPN odds/pickcenter list."""
+    for o in (odds_list or []):
+        if not o:
+            continue
+        od = Odds(o)
+        if od.has_moneyline:
+            return od
+    return None
+
+
 class Match:
     def __init__(self, raw):
         self.id = str(raw.get("id", ""))
@@ -236,6 +339,8 @@ class Match:
         self.goals = self._parse_detail_goals(comp.get("details", []) or [])
         self.notes = [n.get("text", "") for n in (comp.get("notes", []) or [])]
         self.headline = _g(comp, "headlines", 0, "description", default="")
+        # embedded sportsbook odds (present pre-match; absent once played)
+        self.odds = _parse_odds(comp.get("odds"))
 
     def _parse_detail_goals(self, details):
         goals = []
@@ -467,6 +572,8 @@ class MatchDetail:
         attendance = _g(raw, "gameInfo", "attendance")
         self.attendance = attendance
         self.commentary = raw.get("commentary", []) or []
+        # odds live under pickcenter (richer) or a top-level odds list
+        self.odds = _parse_odds(raw.get("pickcenter")) or _parse_odds(raw.get("odds"))
         # A lightweight Match parsed from the summary header, used when the
         # match wasn't already loaded from a scoreboard list.
         self.header_match = None

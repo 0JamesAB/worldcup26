@@ -6,6 +6,7 @@ render(state, cols, rows) -> list[str] (a full frame). Builds the chrome
 draws onto a ui.Canvas.
 """
 
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -102,6 +103,124 @@ def team_goals_text(m, comp, maxw):
             parts.append(f"{who} {g.minute}{tag}")
     txt = " · ".join(parts)
     return term.strip_ansi(term.truncate(txt, maxw)) if txt else ""
+
+
+# ----------------------------------------------------------------------------
+# odds (betting) — keyless, from ESPN's embedded sportsbook feed
+# ----------------------------------------------------------------------------
+
+def odds_enabled():
+    """Odds show by default; WCUP_ODDS=off|0|false|no|hide hides them."""
+    return (os.environ.get("WCUP_ODDS", "").strip().lower()
+            not in ("0", "off", "false", "no", "hide"))
+
+
+def _odds_format():
+    v = os.environ.get("WCUP_ODDS_FORMAT", "").strip().lower()
+    return v if v in ("american", "decimal") else "american"
+
+
+def fmt_price(ml):
+    """A single moneyline price in the user's preferred format."""
+    if ml is None:
+        return ""
+    if _odds_format() == "decimal":
+        d = espn.american_to_decimal(ml)
+        return f"{d:.2f}" if d else ""
+    return f"{ml:+d}"
+
+
+def match_odds(m, detail=None):
+    """The odds to display for a match, if any and if enabled."""
+    if not odds_enabled():
+        return None
+    od = (m.odds if m else None) or (detail.odds if detail else None)
+    if od and od.probabilities():
+        return od
+    return None
+
+
+def _prob_rows(m, od):
+    """[(name, abbr, hex_color_or_None, prob)] in Home / Draw / Away order."""
+    ph, pd, pa = od.probabilities()
+    home, away = (m.home if m else None), (m.away if m else None)
+    return [
+        (home.name if home else "Home", home.abbr if home else "1",
+         team_hex(home.id, home.abbr) if home else None, ph),
+        ("Draw", "X", None, pd),
+        (away.name if away else "Away", away.abbr if away else "2",
+         team_hex(away.id, away.abbr) if away else None, pa),
+    ]
+
+
+def _fit_label(name, abbr, w):
+    """The full name if it fits `w` columns, else the abbreviation."""
+    return name if term.display_width(name) <= w else abbr
+
+
+def draw_odds_bars(cv, r, c, width, m, fillstyle, labelw=9):
+    """Three implied-probability bars (home / draw / away). Returns rows used."""
+    od = m.odds
+    rows = _prob_rows(m, od)
+    favi = max(range(3), key=lambda i: rows[i][3])
+    bx = c + 3 + labelw + 1
+    barmax = max(6, (c + width - 2) - bx - 7)
+    for i, (name, abbr, hexcol, p) in enumerate(rows):
+        rr = r + i
+        col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
+        lbl_style = fillstyle + (fg(*P.white) + BOLD if i == favi else fg(*P.dim))
+        cv.put(rr, c + 3, term.pad(_fit_label(name, abbr, labelw), labelw), lbl_style)
+        fill = min(barmax, int(round(p * barmax)))
+        cv.put(rr, bx, "█" * fill, fillstyle + col)
+        if barmax - fill > 0:
+            cv.put(rr, bx + fill, "░" * (barmax - fill), fillstyle + fg(*P.line))
+        cv.put(rr, bx + barmax + 1, f"{round(p * 100):>2}%",
+               fillstyle + (fg(*P.text) + BOLD if i == favi else fg(*P.dim)))
+    return 3
+
+
+def draw_odds_panel(cv, top, bottom, cols, m, od):
+    """A fuller odds panel for the match-centre body (pre-match)."""
+    bw = min(66, cols - 6)
+    cx = max(2, (cols - bw) // 2)
+    cv.put(top + 1, cx, "Match odds — implied win probability", fg(*P.gold) + BOLD)
+    if od.provider:
+        cv.put(top + 1, cx + bw - term.display_width(od.provider), od.provider, fg(*P.faint))
+    rows = _prob_rows(m, od)
+    prices = [od.ml_home, od.ml_draw, od.ml_away]
+    favi = max(range(3), key=lambda i: rows[i][3])
+    labelw = 18
+    bx = cx + labelw + 1
+    barmax = max(8, bw - labelw - 12)
+    r = top + 3
+    for i, (name, abbr, hexcol, p) in enumerate(rows):
+        col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
+        cv.put(r, cx, term.pad(_fit_label(name, abbr, labelw), labelw),
+               fg(*P.text) + (BOLD if i == favi else ""))
+        fill = min(barmax, int(round(p * barmax)))
+        cv.put(r, bx, "█" * fill, col)
+        if barmax - fill > 0:
+            cv.put(r, bx + fill, "░" * (barmax - fill), fg(*P.line))
+        cv.put(r, bx + barmax + 2, f"{round(p * 100):>2}%",
+               fg(*P.text) + (BOLD if i == favi else ""))
+        price = fmt_price(prices[i])
+        if price:
+            cv.put(r, bx + barmax + 7, price, fg(*P.dim))
+        r += 1
+    extras = []
+    if od.over_under is not None:
+        ou = f"O/U {od.over_under}"
+        if od.over_odds is not None and od.under_odds is not None:
+            ou += f"  (O {fmt_price(od.over_odds)} · U {fmt_price(od.under_odds)})"
+        extras.append(ou)
+    if od.spread_line:
+        sp = f"Spread {od.spread_line}"
+        if od.spread_odds is not None:
+            sp += f" {fmt_price(od.spread_odds)}"
+        extras.append(sp)
+    if extras:
+        cv.put(r + 1, cx, "     ".join(extras), fg(*P.dim))
+    cv.put(r + 2, cx, "Lineups drop ~1h before kickoff.", fg(*P.faint) + ITALIC)
 
 
 # ----------------------------------------------------------------------------
@@ -275,9 +394,16 @@ def draw_footer(cv, cols, rows, st):
 # match widgets
 # ----------------------------------------------------------------------------
 
+def card_rows(m):
+    """Total rows a card consumes (box height + 1 gap): 5, or 8 with odds bars."""
+    return 8 if (m.is_pre and match_odds(m)) else 5
+
+
 def draw_match_card(cv, r, c, width, m, selected, frame):
-    """A 4-row match card. Returns rows consumed (5 incl gap)."""
-    h = 4
+    """A match card. 4 rows tall, or 7 when pre-match odds bars are shown.
+    Returns rows consumed (incl. a 1-row gap)."""
+    show_odds = m.is_pre and match_odds(m)
+    h = 7 if show_odds else 4
     if m.is_live:
         border = fg(*P.live)
     elif m.is_post:
@@ -327,7 +453,13 @@ def draw_match_card(cv, r, c, width, m, selected, frame):
             cv.put(rr, c + 33, gtxt, fillstyle + fg(*P.faint))
         elif m.is_pre and comp.form:
             cv.put(rr, c + 33, "form " + comp.form, fillstyle + fg(*P.faint))
-    return 5
+
+    if show_odds:
+        draw_odds_bars(cv, r + 3, c, width, m, fillstyle)
+        prov = f" {m.odds.provider or 'odds'} "
+        cv.put(r + h - 1, c + max(2, (width - term.display_width(prov)) // 2),
+               prov, fg(*P.faint))
+    return h + 1
 
 
 def compact_status(m, frame):
@@ -391,21 +523,29 @@ def view_live(cv, top, bottom, cols, st, frame):
 
     card_w = min(78, cols - 4)
     col_x = max(2, (cols - card_w) // 2)
-    # scroll window keeps the selected card visible
-    per_screen = max(1, (bottom - top + 1) // 5)
+    # Cards vary in height (pre-match cards carry odds bars), so scroll by
+    # advancing the start index until the selected card fits on screen.
+    avail = bottom - top + 1
     start = 0
-    if st.live_sel >= per_screen:
-        start = st.live_sel - per_screen + 1
+    # advance `start` until the run start..sel fits; keep the running sum O(n)
+    used = sum(card_rows(matches[k]) for k in range(st.live_sel + 1))
+    while start < st.live_sel and used > avail:
+        used -= card_rows(matches[start])
+        start += 1
     r = top
     shown = 0
     for i in range(start, len(matches)):
-        if r + 4 > bottom + 1 or shown >= per_screen:
+        cons = card_rows(matches[i])
+        # box occupies cons-1 rows; keep whole cards (but always draw the first)
+        if shown > 0 and r + cons - 2 > bottom:
             break
         draw_match_card(cv, r, col_x, card_w, matches[i], i == st.live_sel, frame)
-        r += 5
+        r += cons
         shown += 1
-    if len(matches) > per_screen:
-        cv.put(top, cols - 12, f"{st.live_sel + 1}/{len(matches)}", fg(*P.faint))
+    if shown < len(matches):
+        # counter on the context row (top-1), clear of the cards
+        cnt = f"▲▼ {st.live_sel + 1}/{len(matches)}"
+        cv.put(top - 1, cols - term.display_width(cnt) - 2, cnt, fg(*P.faint))
 
 
 def view_schedule(cv, top, bottom, cols, st, frame):
@@ -798,8 +938,9 @@ def view_detail(cv, top, bottom, cols, st, frame):
         m = detail.header_match
     if m is not None and not m.venue and detail is not None and detail.venue:
         m.venue = detail.venue
-    # score header
-    draw_detail_header(cv, top, cols, m, frame)
+    # score header (with a compact odds strip for upcoming matches)
+    od = match_odds(m, detail)
+    draw_detail_header(cv, top, cols, m, frame, od)
     htop = top + 4
     # tabs
     x = 2
@@ -822,7 +963,32 @@ def view_detail(cv, top, bottom, cols, st, frame):
         draw_stats(cv, body_top, bottom, cols, m, detail)
 
 
-def draw_detail_header(cv, top, cols, m, frame):
+def draw_detail_odds_strip(cv, row, cols, m, od):
+    """One-line moneyline strip (shown on every detail tab for pre-match)."""
+    x = 2
+    cv.put(row, x, "Odds", bg(*P.bg1) + fg(*P.faint))
+    x += 6
+    for i, (name, abbr, hexcol, p) in enumerate(_prob_rows(m, od)):
+        if i:
+            cv.put(row, x, "·", bg(*P.bg1) + fg(*P.faint))
+            x += 2
+        col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
+        cv.put(row, x, abbr, bg(*P.bg1) + col + BOLD)
+        x += term.display_width(abbr) + 1
+        pct = f"{round(p * 100)}%"
+        cv.put(row, x, pct, bg(*P.bg1) + fg(*P.text))
+        x += term.display_width(pct) + 1
+    right = ""
+    if od.over_under is not None:
+        right += f"O/U {od.over_under}    "
+    right += od.provider or ""
+    if right.strip():
+        rx = cols - term.display_width(right) - 2
+        if rx > x + 2:
+            cv.put(row, rx, right, bg(*P.bg1) + fg(*P.faint))
+
+
+def draw_detail_header(cv, top, cols, m, frame, od=None):
     cv.fill_rect(top, 0, 3, cols, bg(*P.bg1))
     if not m:
         cv.put(top + 1, 2, "match", fg(*P.text) + BOLD)
@@ -850,11 +1016,17 @@ def draw_detail_header(cv, top, cols, m, frame):
     cv.put(top + 1, x, hw, bg(*P.bg1) + fg(*P.white) + BOLD)
     x += term.display_width(hw) + 1
     cv.put(top + 1, x, " ●", bg(*P.bg1) + fg_hex(team_hex(h.id if h else None, h.abbr if h else None)))
+    if od is not None and m.is_pre:
+        draw_detail_odds_strip(cv, top + 2, cols, m, od)
 
 
 def draw_lineups(cv, top, bottom, cols, m, detail):
     if not detail.lineups:
-        center_msg(cv, top, bottom, cols, "Lineups not available yet (released ~1h before kickoff).")
+        od = match_odds(m, detail)
+        if od:
+            draw_odds_panel(cv, top, bottom, cols, m, od)
+        else:
+            center_msg(cv, top, bottom, cols, "Lineups not available yet (released ~1h before kickoff).")
         return
     # away on left pitch-half, home on right; or stacked pitch. Use a vertical
     # pitch split into two halves stacked: away top, home bottom.

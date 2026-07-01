@@ -224,6 +224,10 @@ wcup — FIFA World Cup 2026 terminal dashboard
   wcup --help          this help
 
 In-app:  1-5 views · ↑↓ move · ←→ day/tabs · Enter open · : command · ? help · q quit
+
+Odds:  win-probability odds (from ESPN's public feed, no key needed) show on
+  upcoming-match cards and in the match centre. Set WCUP_ODDS=off to hide them,
+  or WCUP_ODDS_FORMAT=decimal for decimal instead of American prices.
 """
 
 
