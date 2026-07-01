@@ -7,7 +7,7 @@ purely geometric helpers take explicit style strings instead.
 """
 
 from . import term
-from .canvas import LIGHT
+from .canvas import Canvas, LIGHT
 from .term import BOLD, fg, bg
 from .theme import get_theme
 
@@ -233,3 +233,135 @@ def draw_duel_row(cv, r, c, width, label, lval, rval, lstyle, rstyle,
         cv.put(r + 1, mid + i, "█", track_style + rstyle)
     cv.put(r + 1, mid, divider, track_style + divider_style)
     return 2
+
+
+# ----------------------------------------------------------------------------
+# Single-elimination bracket
+# ----------------------------------------------------------------------------
+
+def bracket_layout(round_sizes, feeders, unit=4, cell_w=20, col_gap=7,
+                   fallback_leaves=1):
+    """Geometry for a single-elimination bracket.
+
+    round_sizes: [n0, n1, ...] slot counts per round, leaves first.
+    feeders:     {(round_idx, slot): (child_a, child_b)} indices into the
+                 previous round; entries and children may be None.
+    fallback_leaves: leaf count assumed for sizing when round 0 is empty.
+
+    Leaf vertical order is derived by a depth-first walk from the last
+    non-empty round so real feeders sit adjacent (no crossings); unplaced
+    leaves are appended in index order. Parents sit at the midpoint of
+    their placed children, with a spaced fallback for parentless slots.
+
+    Returns (width, height, colx, ypos):
+      colx: [x of each round column]
+      ypos: {(round_idx, slot): center row (float; round() to draw)}
+    """
+    nrounds = len(round_sizes)
+    order, seen = [], set()
+
+    def walk(ri, i):
+        if i is None or not (0 <= i < round_sizes[ri]):
+            return
+        if ri == 0:
+            if i not in seen:
+                seen.add(i)
+                order.append(i)
+            return
+        fa, fh = feeders.get((ri, i), (None, None))
+        walk(ri - 1, fa)
+        walk(ri - 1, fh)
+
+    if round_sizes and round_sizes[-1]:
+        for i in range(round_sizes[-1]):
+            walk(nrounds - 1, i)
+    else:
+        for ri in range(nrounds - 2, 0, -1):
+            if round_sizes[ri]:
+                for i in range(round_sizes[ri]):
+                    walk(ri, i)
+                break
+    for i in range(round_sizes[0] if round_sizes else 0):  # leaves the walk missed
+        if i not in seen:
+            seen.add(i)
+            order.append(i)
+
+    leafpos = {leaf: pos for pos, leaf in enumerate(order)}
+    ypos = {(0, i): leafpos.get(i, i) * unit + 2
+            for i in range(round_sizes[0] if round_sizes else 0)}
+    for ri in range(1, nrounds):
+        for i in range(round_sizes[ri]):
+            fa, fh = feeders.get((ri, i), (None, None))
+            ys = [ypos[(ri - 1, f)] for f in (fa, fh)
+                  if f is not None and (ri - 1, f) in ypos]
+            ypos[(ri, i)] = (sum(ys) / len(ys) if ys
+                             else i * unit * (2 ** ri) + (2 ** ri))
+
+    n0 = round_sizes[0] if round_sizes and round_sizes[0] else fallback_leaves
+    height = max(1, n0) * unit + 6
+    width = nrounds * (cell_w + col_gap) + 6
+    colx = [2 + ri * (cell_w + col_gap) for ri in range(nrounds)]
+    return width, height, colx, ypos
+
+
+def draw_bracket(round_sizes, feeders, draw_cell, labels=None, label_style="",
+                 connector_style="", bg_style="", unit=4, cell_w=20,
+                 col_gap=7, fallback_leaves=1, canvas_cls=Canvas):
+    """Build and return an oversized Canvas containing the bracket.
+
+    Draws connectors first, then column labels (row 0), then calls
+      draw_cell(cv, cy, cx, round_idx, slot)
+    for every slot — the caller draws whatever it wants in a cell_w-wide
+    region centered at row cy. The returned Canvas may be drawn on further
+    (e.g. a consolation match) before the caller blits or scrolls it.
+
+    Returns (canvas, colx, ypos) — see bracket_layout.
+    """
+    width, height, colx, ypos = bracket_layout(
+        round_sizes, feeders, unit=unit, cell_w=cell_w, col_gap=col_gap,
+        fallback_leaves=fallback_leaves)
+    cv = canvas_cls(width, height, bg_style)
+
+    def cy_of(ri, i):
+        return int(round(ypos.get((ri, i), 2)))
+
+    # connectors first so cell boxes overlay the line ends cleanly
+    for ri in range(1, len(round_sizes)):
+        cx = colx[ri]
+        gutter, prev_right = cx - 3, colx[ri - 1] + cell_w - 1
+        for i in range(round_sizes[ri]):
+            fa, fh = feeders.get((ri, i), (None, None))
+            child_ys = [cy_of(ri - 1, f) for f in (fa, fh)
+                        if f is not None and (ri - 1, f) in ypos]
+            if child_ys:
+                draw_connector(cv, min(child_ys), max(child_ys),
+                               cy_of(ri, i), prev_right, gutter, cx,
+                               connector_style)
+
+    for ri in range(len(round_sizes)):
+        cx = colx[ri]
+        if labels and ri < len(labels) and labels[ri]:
+            cv.put(0, cx + 3, labels[ri], label_style)
+        for i in range(round_sizes[ri]):
+            draw_cell(cv, cy_of(ri, i), cx, ri, i)
+    return cv, colx, ypos
+
+
+def draw_connector(cv, c1, c2, cc, prev_right, gx, next_left, style=""):
+    """Join two child cells (rows c1, c2) to a parent cell (row cc):
+    stubs from each child's right edge to the gutter spine, then a tee
+    out to the parent column."""
+    lo, hi = min(c1, c2), max(c1, c2)
+    # stubs from each child's right edge to the gutter
+    for cr in (c1, c2):
+        for x in range(prev_right, gx):
+            cv.put(cr, x, "─", style)
+    # vertical spine
+    for y in range(lo, hi + 1):
+        cv.put(y, gx, "│", style)
+    cv.put(lo, gx, "╮", style)
+    cv.put(hi, gx, "╯", style)
+    # branch out to the parent (rightward), so the spine tee must open right
+    cv.put(cc, gx, "├", style)
+    for x in range(gx + 1, next_left):
+        cv.put(cc, x, "─", style)

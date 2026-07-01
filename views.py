@@ -716,110 +716,31 @@ def _bracket_model(br):
     return numbered, feeders
 
 
-def _bracket_positions(numbered, feeders):
-    """Vertical centre for every match so real feeders sit adjacent (no crossings)."""
-    order, seen = [], set()
-
-    def walk(slug, i):
-        if i is None or not (0 <= i < len(numbered.get(slug, []))):
-            return
-        if slug == "round-of-32":
-            if i not in seen:
-                seen.add(i)
-                order.append(i)
-            return
-        fa, fh = feeders.get((slug, i), (None, None))
-        walk(KO_PREV[slug], fa)
-        walk(KO_PREV[slug], fh)
-
-    if numbered.get("final"):
-        walk("final", 0)
-    else:
-        for slug in ("semifinals", "quarterfinals", "round-of-16"):
-            if numbered.get(slug):
-                for i in range(len(numbered[slug])):
-                    walk(slug, i)
-                break
-    for i in range(len(numbered.get("round-of-32", []))):  # leaves the walk missed
-        if i not in seen:
-            seen.add(i)
-            order.append(i)
-
-    leafpos = {leaf: pos for pos, leaf in enumerate(order)}
-    ypos = {("round-of-32", i): leafpos.get(i, i) * UNIT + 2
-            for i in range(len(numbered.get("round-of-32", [])))}
-    for slug in KO_ORDER[1:]:
-        prev, depth = KO_PREV[slug], KO_ORDER.index(slug)
-        for i in range(len(numbered.get(slug, []))):
-            fa, fh = feeders.get((slug, i), (None, None))
-            ys = [ypos[(prev, f)] for f in (fa, fh)
-                  if f is not None and (prev, f) in ypos]
-            ypos[(slug, i)] = (sum(ys) / len(ys) if ys
-                               else i * UNIT * (2 ** depth) + (2 ** depth))
-    return ypos
-
-
 def build_bracket_canvas(br, frame):
     numbered, feeders = _bracket_model(br)
-    ypos = _bracket_positions(numbered, feeders)
-    n0 = max(1, len(numbered.get("round-of-32", [])) or 16)
-    height = n0 * UNIT + 6
-    width = len(KO_ORDER) * (CELL_W + COL_GAP) + 6
-    cv = Canvas(width, height, bg(*P.bg0))
+    sizes = [len(numbered.get(slug, [])) for slug in KO_ORDER]
+    ridx = {slug: i for i, slug in enumerate(KO_ORDER)}
+    idx_feeders = {(ridx[slug], i): v for (slug, i), v in feeders.items()}
 
-    colx, x = {}, 2
-    for slug in KO_ORDER:
-        colx[slug] = x
-        x += CELL_W + COL_GAP
+    def cell(cv, cy, cx, ri, i):
+        draw_bracket_cell(cv, cy, cx, numbered[KO_ORDER[ri]][i], frame)
 
-    def cy_of(slug, i):
-        return int(round(ypos.get((slug, i), 2)))
-
-    # connectors first so cell boxes overlay the line ends cleanly
-    for slug in KO_ORDER[1:]:
-        prev, cx = KO_PREV[slug], colx[slug]
-        gutter, prev_right = cx - 3, colx[KO_PREV[slug]] + CELL_W - 1
-        for i in range(len(numbered.get(slug, []))):
-            fa, fh = feeders.get((slug, i), (None, None))
-            child_ys = [cy_of(prev, f) for f in (fa, fh)
-                        if f is not None and (prev, f) in ypos]
-            if child_ys:
-                draw_connector(cv, min(child_ys), max(child_ys),
-                               cy_of(slug, i), prev_right, gutter, cx)
-
-    for slug in KO_ORDER:
-        cx = colx[slug]
-        cv.put(0, cx + 3, _ROUND_LABELS.get(slug, slug), fg(*P.gold) + BOLD)
-        for i, m in enumerate(numbered.get(slug, [])):
-            draw_bracket_cell(cv, cy_of(slug, i), cx, m, frame)
+    cv, colx, ypos = widgets.draw_bracket(
+        sizes, idx_feeders, cell,
+        labels=[_ROUND_LABELS.get(s, s) for s in KO_ORDER],
+        label_style=fg(*P.gold) + BOLD, connector_style=fg(*P.line),
+        bg_style=bg(*P.bg0), unit=UNIT, cell_w=CELL_W, col_gap=COL_GAP,
+        fallback_leaves=16)
 
     # 3rd-place match under the final column
     third = br.get("3rd-place-match", [])
     if third:
-        ty = cy_of("final", 0) + 5
-        if ty + 3 < height:
-            cv.put(ty - 2, colx["final"] + 3, "3rd Place", fg(*P.dim) + BOLD)
-            draw_bracket_cell(cv, ty, colx["final"], third[0], frame)
+        fin = len(KO_ORDER) - 1
+        ty = int(round(ypos.get((fin, 0), 2))) + 5
+        if ty + 3 < cv.h:
+            cv.put(ty - 2, colx[fin] + 3, "3rd Place", fg(*P.dim) + BOLD)
+            draw_bracket_cell(cv, ty, colx[fin], third[0], frame)
     return cv
-
-
-def draw_connector(cv, c1, c2, cc, prev_right, gx, next_left):
-    """Join two child cells (rows c1,c2) to a parent cell (row cc)."""
-    lo, hi = min(c1, c2), max(c1, c2)
-    col = fg(*P.line)
-    # stubs from each child's right edge to the gutter
-    for cr in (c1, c2):
-        for x in range(prev_right, gx):
-            cv.put(cr, x, "─", col)
-    # vertical spine
-    for y in range(lo, hi + 1):
-        cv.put(y, gx, "│", col)
-    cv.put(lo, gx, "╮", col)
-    cv.put(hi, gx, "╯", col)
-    # branch out to the parent (rightward), so the spine tee must open right
-    cv.put(cc, gx, "├", col)
-    for x in range(gx + 1, next_left):
-        cv.put(cc, x, "─", col)
 
 
 def draw_bracket_cell(cv, cy, cx, m, frame):

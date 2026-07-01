@@ -176,5 +176,80 @@ class TestDrawDuelRow(unittest.TestCase):
         self.assertEqual(cv.grid[0][5].style, "L")   # last cell of left value
 
 
+class TestBracketLayout(unittest.TestCase):
+    # 4 leaves -> 2 -> 1, fully wired
+    SIZES = [4, 2, 1]
+    FEEDERS = {(1, 0): (0, 1), (1, 1): (2, 3), (2, 0): (0, 1)}
+
+    def test_geometry(self):
+        w, h, colx, ypos = widgets.bracket_layout(self.SIZES, self.FEEDERS)
+        self.assertEqual(w, 3 * 27 + 6)
+        self.assertEqual(h, 4 * 4 + 6)
+        self.assertEqual(colx, [2, 29, 56])
+
+    def test_leaves_evenly_spaced_parents_at_midpoints(self):
+        _, _, _, ypos = widgets.bracket_layout(self.SIZES, self.FEEDERS)
+        self.assertEqual([ypos[(0, i)] for i in range(4)], [2, 6, 10, 14])
+        self.assertEqual(ypos[(1, 0)], 4.0)   # midpoint of 2 and 6
+        self.assertEqual(ypos[(1, 1)], 12.0)
+        self.assertEqual(ypos[(2, 0)], 8.0)
+
+    def test_crossing_feeders_reorder_leaves(self):
+        feeders = {(1, 0): (3, 0), (1, 1): (1, 2), (2, 0): (0, 1)}
+        _, _, _, ypos = widgets.bracket_layout([4, 2, 1], feeders)
+        # walk order: 3, 0, 1, 2 -> leaf 3 sits on top
+        self.assertEqual(ypos[(0, 3)], 2)
+        self.assertEqual(ypos[(0, 0)], 6)
+
+    def test_parentless_slot_fallback(self):
+        _, _, _, ypos = widgets.bracket_layout([4, 2, 1], {})
+        # no feeders: parents use the spaced fallback i*unit*2^ri + 2^ri
+        self.assertEqual(ypos[(1, 0)], 2)
+        self.assertEqual(ypos[(1, 1)], 10)
+
+    def test_empty_leaves_fallback_height(self):
+        _, h, _, _ = widgets.bracket_layout([0, 2, 1], {}, fallback_leaves=16)
+        self.assertEqual(h, 16 * 4 + 6)
+
+
+class TestDrawBracket(unittest.TestCase):
+    def test_cells_and_connectors(self):
+        seen = []
+
+        def cell(cv, cy, cx, ri, i):
+            seen.append((ri, i, cy, cx))
+            cv.put(cy, cx, f"{ri}{i}")
+
+        feeders = {(1, 0): (0, 1), (1, 1): (2, 3), (2, 0): (0, 1)}
+        cv, colx, ypos = widgets.draw_bracket([4, 2, 1], feeders, cell,
+                                              labels=["A", "B", "C"])
+        self.assertEqual(len(seen), 7)          # every slot drawn
+        text = "\n".join("".join(c.ch for c in row) for row in cv.grid)
+        self.assertIn("A", text)                # labels
+        self.assertIn("│", text)                # connector spine
+        self.assertIn("╮", text)
+        self.assertIn("├", text)
+        # cell callback got the layout centers
+        self.assertIn((2, 0, 8, colx[2]), seen)
+
+    def test_canvas_is_returned_for_overdraw(self):
+        cv, colx, ypos = widgets.draw_bracket([2, 1], {(1, 0): (0, 1)},
+                                              lambda *a: None)
+        cv.put(0, 0, "X")  # caller can draw more
+        self.assertEqual(cv.grid[0][0].ch, "X")
+
+
+class TestDrawConnector(unittest.TestCase):
+    def test_shapes(self):
+        cv = Canvas(20, 10)
+        widgets.draw_connector(cv, 2, 6, 4, 5, 8, 12, "S")
+        self.assertEqual(cv.grid[2][8].ch, "╮")
+        self.assertEqual(cv.grid[6][8].ch, "╯")
+        self.assertEqual(cv.grid[4][8].ch, "├")
+        self.assertEqual(cv.grid[3][8].ch, "│")
+        self.assertEqual(cv.grid[2][5].ch, "─")   # stub
+        self.assertEqual(cv.grid[4][11].ch, "─")  # branch to parent
+
+
 if __name__ == "__main__":
     unittest.main()
