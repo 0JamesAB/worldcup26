@@ -1,0 +1,102 @@
+"""Color helpers and depth fallback."""
+
+import os
+import unittest
+from unittest import mock
+
+from tui import term
+
+
+class DepthCase(unittest.TestCase):
+    """Save/restore the module color depth around each test."""
+
+    def setUp(self):
+        self._saved = term.get_color_depth()
+
+    def tearDown(self):
+        term.set_color_depth(self._saved)
+
+
+class TestRgbTo256(unittest.TestCase):
+    def test_grayscale_ends(self):
+        self.assertEqual(term._rgb_to_256(0, 0, 0), 16)
+        self.assertEqual(term._rgb_to_256(255, 255, 255), 231)
+
+    def test_grayscale_ramp(self):
+        self.assertEqual(term._rgb_to_256(128, 128, 128), 232 + round(((128 - 8) / 247) * 24))
+
+    def test_cube_corners(self):
+        self.assertEqual(term._rgb_to_256(255, 0, 0), 16 + 36 * 5)
+        self.assertEqual(term._rgb_to_256(0, 255, 0), 16 + 6 * 5)
+        self.assertEqual(term._rgb_to_256(0, 0, 255), 16 + 5)
+
+
+class TestFgBgByDepth(DepthCase):
+    def test_truecolor(self):
+        term.set_color_depth("truecolor")
+        self.assertEqual(term.fg(255, 0, 0), "\x1b[38;2;255;0;0m")
+        self.assertEqual(term.bg(0, 0, 255), "\x1b[48;2;0;0;255m")
+
+    def test_256(self):
+        term.set_color_depth("256")
+        self.assertEqual(term.fg(255, 0, 0), f"\x1b[38;5;{16 + 36 * 5}m")
+
+    def test_16_returns_empty(self):
+        # Documented quirk: depth 16 emits no color codes at all.
+        term.set_color_depth("16")
+        self.assertEqual(term.fg(255, 0, 0), "")
+        self.assertEqual(term.bg(255, 0, 0), "")
+
+    def test_clamping(self):
+        term.set_color_depth("truecolor")
+        self.assertEqual(term.fg(-5, 300, 10), "\x1b[38;2;0;255;10m")
+
+    def test_bad_depth_rejected(self):
+        with self.assertRaises(ValueError):
+            term.set_color_depth("42")
+
+
+class TestHexRgb(unittest.TestCase):
+    def test_six_digit(self):
+        self.assertEqual(term.hex_rgb("#f0c458"), (240, 196, 88))
+
+    def test_three_digit(self):
+        self.assertEqual(term.hex_rgb("abc"), (0xAA, 0xBB, 0xCC))
+
+    def test_bad_input(self):
+        self.assertIsNone(term.hex_rgb(""))
+        self.assertIsNone(term.hex_rgb(None))
+        self.assertIsNone(term.hex_rgb("zzzzzz"))
+        self.assertIsNone(term.hex_rgb("#12345"))
+
+    def test_fg_hex_fallback(self):
+        saved = term.get_color_depth()
+        try:
+            term.set_color_depth("truecolor")
+            self.assertEqual(term.fg_hex("bogus", fallback=(1, 2, 3)),
+                             term.fg(1, 2, 3))
+        finally:
+            term.set_color_depth(saved)
+
+
+class TestDetection(unittest.TestCase):
+    def test_no_color_forces_16(self):
+        with mock.patch.dict(os.environ, {"NO_COLOR": "1"}):
+            self.assertEqual(term._detect_color_depth(), "16")
+
+    def test_colorterm_truecolor(self):
+        env = {"COLORTERM": "truecolor", "TERM": "xterm-256color"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(term._detect_color_depth(), "truecolor")
+
+    def test_term_256(self):
+        with mock.patch.dict(os.environ, {"TERM": "xterm-256color"}, clear=True):
+            self.assertEqual(term._detect_color_depth(), "256")
+
+    def test_default_truecolor(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(term._detect_color_depth(), "truecolor")
+
+
+if __name__ == "__main__":
+    unittest.main()
