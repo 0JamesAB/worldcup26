@@ -7,23 +7,9 @@ all in your terminal, updating live, driven entirely by the keyboard.
 **No dependencies. No API key. Pure Python 3 standard library.** Data comes from
 ESPN's public JSON feeds.
 
-```
-  ⚽ FIFA WORLD CUP 2026 · USA · CAN · MEX                                 ● 1 LIVE  20:41:08
- 1 Live   2 Schedule   3 Groups   4 Bracket   5 Scorers                        :help  ·  q quit
-  Today · Round of 32 · 3 fixtures · 1 live
-         ╭─ Round of 32 · MetLife Stadium ─────────────────────────────────────── 67' ─╮
-         │ ● Sweden                    0                                              │
-         │ ● France                    2  Mbappé 45' · Barcola 53'                    │
-         ╰────────────────────────────────────────────────────────────────────────────╯
-         ╭─ Round of 32 · AT&T Stadium ────────────────────────────────────────────FT─╮
-         │ ● Norway                    2  Nusa 39' · Haaland 86'                      │
-         │ ● Ivory Coast               1  Diallo 74'                                  │
-         ╰────────────────────────────────────────────────────────────────────────────╯
-  ↑↓  move   ↵  open   ⇥  view   :  command   r  refresh     next: ECU v MEX · kickoff in 1h50m
-```
-
-*(colours, a formation pitch, the bracket tree and the live command palette don't
-survive a plain-text paste — run it to see them.)*
+<p align="center">
+  <img src="assets/live.svg" alt="Live scores — today's Round-of-32 matches as cards with live clock, score and goalscorers" width="820">
+</p>
 
 ---
 
@@ -61,6 +47,11 @@ wcup --help           # usage
 wcup --snapshot 120x40 bracket   # render one frame to stdout (no TTY) — good for screenshots
 ```
 
+<p align="center">
+  <img src="assets/team.svg" alt="A nation's page — Brazil's World Cup results and upcoming fixtures" width="820">
+  <br><sub><code>wcup --BRA</code> — a nation's results, record and next fixture.</sub>
+</p>
+
 ---
 
 ## Views
@@ -73,11 +64,30 @@ wcup --snapshot 120x40 bracket   # render one frame to stdout (no TTY) — good 
 | `4` | **Bracket**| The full knockout tree, Round of 32 → Final, with connectors & shootouts.|
 | `5` | **Scorers**| Golden-boot & assists leaderboards with bars.                           |
 
+<table>
+  <tr>
+    <td width="50%"><img src="assets/bracket.svg" alt="Knockout bracket — Round of 32 to Final as a tree with connectors, colour bars and scores"><br><sub><b>4 · Bracket</b> — the knockout tree, with feeders reconstructed from placeholders.</sub></td>
+    <td width="50%"><img src="assets/scorers.svg" alt="Golden boot leaderboard with team-coloured bars"><br><sub><b>5 · Scorers</b> — the golden-boot race, bars scaled to the leader.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/groups.svg" alt="All twelve group tables, green rows advancing"><br><sub><b>3 · Groups</b> — all 12 tables at once, green = advancing.</sub></td>
+    <td width="50%"><img src="assets/schedule.svg" alt="Schedule for a single day with kickoff times, scores and venues"><br><sub><b>2 · Schedule</b> — browse fixtures day by day with <code>←/→</code>.</sub></td>
+  </tr>
+</table>
+
 Press **Enter** on any match to open the **Match Centre**:
 
 * **Lineups** – both starting XIs drawn on a pitch by formation, plus the bench.
 * **Timeline** – goals ⚽, cards 🟨🟥 and subs 🔁 on a centre spine, away left / home right.
 * **Stats** – possession, shots, corners… as head-to-head bars.
+
+<table>
+  <tr>
+    <td width="34%"><img src="assets/lineups.svg" alt="Both starting XIs drawn on a pitch by formation"><br><sub><b>Lineups</b></sub></td>
+    <td width="34%"><img src="assets/timeline.svg" alt="Match timeline with goals, cards and subs on a centre spine"><br><sub><b>Timeline</b></sub></td>
+    <td width="34%"><img src="assets/stats.svg" alt="Head-to-head match statistics as mirrored bars"><br><sub><b>Stats</b></sub></td>
+  </tr>
+</table>
 
 ---
 

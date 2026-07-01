@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1156" height="826" viewBox="0 0 1156 826" font-family="'DejaVu Sans Mono','Menlo','Consolas','Cascadia Code',monospace" font-size="15.5">
+<rect x="0" y="0" width="1156" height="826" rx="10" fill="#0c0e14"/>
+<rect x="0" y="0" width="1156" height="30" rx="10" fill="#1b1f2a"/>
+<rect x="0" y="20" width="1156" height="10" fill="#1b1f2a"/>
+<circle cx="18" cy="15" r="6" fill="#ff5f56"/>
+<circle cx="38" cy="15" r="6" fill="#ffbd2e"/>
+<circle cx="58" cy="15" r="6" fill="#27c93f"/>
+<text x="578" y="19" fill="#8a93a6" font-size="12.5" text-anchor="middle">wcup — match centre · timeline</text>
+<rect x="18.00" y="48.00" width="27.99" height="19.00" fill="#141821"/>
+<rect x="55.32" y="48.00" width="1082.40" height="19.00" fill="#141821"/>
+<rect x="18.00" y="67.00" width="1119.72" height="19.00" fill="#141821"/>
+<rect x="18.00" y="105.00" width="1119.72" height="19.00" fill="#141821"/>
+<rect x="18.00" y="124.00" width="1119.72" height="19.00" fill="#141821"/>
+<rect x="18.00" y="143.00" width="1119.72" height="19.00" fill="#141821"/>
+<rect x="36.66" y="181.00" width="83.98" height="19.00" fill="#141821"/>
+<rect x="129.97" y="181.00" width="93.31" height="19.00" fill="#58c682"/>
+<rect x="232.61" y="181.00" width="65.32" height="19.00" fill="#141821"/>
+<rect x="549.87" y="238.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="257.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="276.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="295.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="314.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="333.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="352.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="371.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="390.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="409.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="428.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="447.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="466.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="549.87" y="485.00" width="65.32" height="19.00" fill="#1e2430"/>
+<rect x="18.00" y="770.00" width="1119.72" height="19.00" fill="#141821"/>
+<rect x="18.00" y="789.00" width="9.33" height="19.00" fill="#141821"/>
+<rect x="27.33" y="789.00" width="37.32" height="19.00" fill="#1e2430"/>
+<rect x="64.66" y="789.00" width="65.32" height="19.00" fill="#141821"/>
+<rect x="129.97" y="789.00" width="37.32" height="19.00" fill="#1e2430"/>
+<rect x="167.30" y="789.00" width="83.98" height="19.00" fill="#141821"/>
+<rect x="251.27" y="789.00" width="46.66" height="19.00" fill="#1e2430"/>
+<rect x="297.93" y="789.00" width="65.32" height="19.00" fill="#141821"/>
+<rect x="363.25" y="789.00" width="27.99" height="19.00" fill="#1e2430"/>
+<rect x="391.24" y="789.00" width="746.48" height="19.00" fill="#141821"/>
+<text x="45.99" y="62.00" fill="#5ad28c" text-anchor="middle">⚽</text>
+<text x="64.66" y="62.00" fill="#5ece9b" font-weight="bold">F</text>
+<text x="73.99" y="62.00" fill="#60cca3" font-weight="bold">I</text>
+<text x="83.32" y="62.00" fill="#62caaa" font-weight="bold">F</text>
+<text x="92.65" y="62.00" fill="#64c8b2" font-weight="bold">A</text>
+<text x="111.31" y="62.00" fill="#68c4c1" font-weight="bold">W</text>
+<text x="120.64" y="62.00" fill="#6ac2c9" font-weight="bold">O</text>
+<text x="129.97" y="62.00" fill="#6cc0d1" font-weight="bold">R</text>
+<text x="139.30" y="62.00" fill="#6ebed8" font-weight="bold">L</text>
+<text x="148.63" y="62.00" fill="#70bce0" font-weight="bold">D</text>
+<text x="167.30" y="62.00" fill="#74b8ef" font-weight="bold">C</text>
+<text x="176.63" y="62.00" fill="#76b6f7" font-weight="bold">U</text>
+<text x="185.96" y="62.00" fill="#78b4ff" font-weight="bold">P</text>
+<text x="204.62" y="62.00" fill="#f0c458" font-weight="bold">2026</text>
+<text x="251.27" y="62.00" fill="#586074">·</text>
+<text x="269.94" y="62.00" fill="#586074">USA</text>
+<text x="307.26" y="62.00" fill="#586074">·</text>
+<text x="325.92" y="62.00" fill="#586074">CAN</text>
+<text x="363.25" y="62.00" fill="#586074">·</text>
+<text x="381.91" y="62.00" fill="#586074">MEX</text>
+<text x="941.77" y="62.00" fill="#586074">○</text>
+<text x="960.43" y="62.00" fill="#586074">no</text>
+<text x="988.42" y="62.00" fill="#586074">live</text>
+<text x="1044.41" y="62.00" fill="#848ea2">11:37:43</text>
+<text x="27.33" y="81.00" fill="#848ea2">1</text>
+<text x="45.99" y="81.00" fill="#848ea2">Live</text>
+<text x="111.31" y="81.00" fill="#848ea2">2</text>
+<text x="129.97" y="81.00" fill="#848ea2">Schedule</text>
+<text x="232.61" y="81.00" fill="#848ea2">3</text>
+<text x="251.27" y="81.00" fill="#848ea2">Groups</text>
+<text x="335.25" y="81.00" fill="#848ea2">4</text>
+<text x="353.92" y="81.00" fill="#848ea2">Bracket</text>
+<text x="447.23" y="81.00" fill="#848ea2">5</text>
+<text x="465.89" y="81.00" fill="#848ea2">Scorers</text>
+<text x="979.09" y="81.00" fill="#586074">:help</text>
+<text x="1044.41" y="81.00" fill="#586074">·</text>
+<text x="1072.40" y="81.00" fill="#586074">q</text>
+<text x="1091.07" y="81.00" fill="#586074">quit</text>
+<text x="36.66" y="100.00" fill="#848ea2" font-style="italic">Match</text>
+<text x="92.65" y="100.00" fill="#848ea2" font-style="italic">centre</text>
+<text x="36.66" y="119.00" fill="#848ea2">Round</text>
+<text x="92.65" y="119.00" fill="#848ea2">of</text>
+<text x="120.64" y="119.00" fill="#848ea2">32</text>
+<text x="157.97" y="119.00" fill="#848ea2">·</text>
+<text x="185.96" y="119.00" fill="#848ea2">Mercedes-Benz</text>
+<text x="316.59" y="119.00" fill="#848ea2">Stadium</text>
+<text x="1100.40" y="119.00" fill="#848ea2" font-weight="bold">FT</text>
+<text x="437.89" y="138.00" fill="#418fde">●</text>
+<text x="456.56" y="138.00" fill="#f5f7fc" font-weight="bold">Congo</text>
+<text x="512.54" y="138.00" fill="#f5f7fc" font-weight="bold">DR</text>
+<text x="568.53" y="138.00" fill="#f0c458" font-weight="bold">1</text>
+<text x="596.52" y="138.00" fill="#f0c458" font-weight="bold">-</text>
+<text x="624.51" y="138.00" fill="#f0c458" font-weight="bold">2</text>
+<text x="671.17" y="138.00" fill="#f5f7fc" font-weight="bold">England</text>
+<text x="755.15" y="138.00" fill="#888888">●</text>
+<text x="45.99" y="195.00" fill="#848ea2">Lineups</text>
+<text x="139.30" y="195.00" fill="#0c0e14" font-weight="bold">Timeline</text>
+<text x="241.94" y="195.00" fill="#848ea2">Stats</text>
+<text x="988.42" y="195.00" fill="#586074">←→</text>
+<text x="1016.42" y="195.00" fill="#586074">tabs</text>
+<text x="1063.07" y="195.00" fill="#586074">·</text>
+<text x="1081.73" y="195.00" fill="#586074">esc</text>
+<text x="1119.06" y="195.00" fill="#586074">ba</text>
+<text x="36.66" y="214.00" fill="#343c4e">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="447.23" y="233.00" fill="#418fde" font-weight="bold">Congo</text>
+<text x="503.21" y="233.00" fill="#418fde" font-weight="bold">DR</text>
+<text x="577.86" y="233.00" fill="#343c4e">┊</text>
+<text x="391.24" y="252.00" fill="#f5f7fc" font-weight="bold">Brian</text>
+<text x="447.23" y="252.00" fill="#f5f7fc" font-weight="bold">Cipenga</text>
+<text x="531.20" y="252.00" fill="#f5f7fc" text-anchor="middle">⚽</text>
+<text x="568.53" y="252.00" fill="#f0c458" font-weight="bold">7&#x27;</text>
+<text x="568.53" y="271.00" fill="#f0c458" font-weight="bold">19&#x27;</text>
+<text x="624.51" y="271.00" fill="#ecc85c" text-anchor="middle">🟨</text>
+<text x="643.18" y="271.00" fill="#ecc85c">Jude</text>
+<text x="689.83" y="271.00" fill="#ecc85c">Bellingham</text>
+<text x="409.90" y="290.00" fill="#ecc85c">Noah</text>
+<text x="456.56" y="290.00" fill="#ecc85c">Sadiki</text>
+<text x="531.20" y="290.00" fill="#ecc85c" text-anchor="middle">🟨</text>
+<text x="568.53" y="290.00" fill="#f0c458" font-weight="bold">28&#x27;</text>
+<text x="568.53" y="309.00" fill="#f0c458" font-weight="bold">61&#x27;</text>
+<text x="624.51" y="309.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="643.18" y="309.00" fill="#848ea2">Bukayo</text>
+<text x="708.49" y="309.00" fill="#848ea2">Saka</text>
+<text x="755.15" y="309.00" fill="#848ea2">↑</text>
+<text x="773.81" y="309.00" fill="#848ea2">Noni</text>
+<text x="820.47" y="309.00" fill="#848ea2">Madueke</text>
+<text x="895.11" y="309.00" fill="#848ea2">↓</text>
+<text x="568.53" y="328.00" fill="#f0c458" font-weight="bold">61&#x27;</text>
+<text x="624.51" y="328.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="643.18" y="328.00" fill="#848ea2">Anthony</text>
+<text x="717.82" y="328.00" fill="#848ea2">Gordon</text>
+<text x="783.14" y="328.00" fill="#848ea2">↑</text>
+<text x="801.80" y="328.00" fill="#848ea2">Marcus</text>
+<text x="867.12" y="328.00" fill="#848ea2">Rashford</text>
+<text x="951.10" y="328.00" fill="#848ea2">↓</text>
+<text x="204.62" y="347.00" fill="#848ea2">Meschack</text>
+<text x="288.60" y="347.00" fill="#848ea2">Elia</text>
+<text x="335.25" y="347.00" fill="#848ea2">↑</text>
+<text x="353.92" y="347.00" fill="#848ea2">Nathanaël</text>
+<text x="447.23" y="347.00" fill="#848ea2">Mbuku</text>
+<text x="503.21" y="347.00" fill="#848ea2">↓</text>
+<text x="531.20" y="347.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="568.53" y="347.00" fill="#f0c458" font-weight="bold">64&#x27;</text>
+<text x="568.53" y="366.00" fill="#f0c458" font-weight="bold">70&#x27;</text>
+<text x="624.51" y="366.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="643.18" y="366.00" fill="#848ea2">Eberechi</text>
+<text x="727.16" y="366.00" fill="#848ea2">Eze</text>
+<text x="764.48" y="366.00" fill="#848ea2">↑</text>
+<text x="783.14" y="366.00" fill="#848ea2">Djed</text>
+<text x="829.80" y="366.00" fill="#848ea2">Spence</text>
+<text x="895.11" y="366.00" fill="#848ea2">↓</text>
+<text x="568.53" y="385.00" fill="#f0c458" font-weight="bold">75&#x27;</text>
+<text x="624.51" y="385.00" fill="#f5f7fc" text-anchor="middle">⚽</text>
+<text x="643.18" y="385.00" fill="#f5f7fc" font-weight="bold">Harry</text>
+<text x="699.16" y="385.00" fill="#f5f7fc" font-weight="bold">Kane</text>
+<text x="223.28" y="404.00" fill="#848ea2">Théo</text>
+<text x="269.94" y="404.00" fill="#848ea2">Bongonda</text>
+<text x="353.92" y="404.00" fill="#848ea2">↑</text>
+<text x="372.58" y="404.00" fill="#848ea2">Brian</text>
+<text x="428.56" y="404.00" fill="#848ea2">Cipenga</text>
+<text x="503.21" y="404.00" fill="#848ea2">↓</text>
+<text x="531.20" y="404.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="568.53" y="404.00" fill="#f0c458" font-weight="bold">76&#x27;</text>
+<text x="223.28" y="423.00" fill="#848ea2">Edo</text>
+<text x="260.61" y="423.00" fill="#848ea2">Kayembe</text>
+<text x="335.25" y="423.00" fill="#848ea2">↑</text>
+<text x="353.92" y="423.00" fill="#848ea2">Ngal&#x27;ayel</text>
+<text x="447.23" y="423.00" fill="#848ea2">Mukau</text>
+<text x="503.21" y="423.00" fill="#848ea2">↓</text>
+<text x="531.20" y="423.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="568.53" y="423.00" fill="#f0c458" font-weight="bold">76&#x27;</text>
+<text x="568.53" y="442.00" fill="#f0c458" font-weight="bold">86&#x27;</text>
+<text x="624.51" y="442.00" fill="#f5f7fc" text-anchor="middle">⚽</text>
+<text x="643.18" y="442.00" fill="#f5f7fc" font-weight="bold">Harry</text>
+<text x="699.16" y="442.00" fill="#f5f7fc" font-weight="bold">Kane</text>
+<text x="213.95" y="461.00" fill="#848ea2">Joris</text>
+<text x="269.94" y="461.00" fill="#848ea2">Kayembe</text>
+<text x="344.58" y="461.00" fill="#848ea2">↑</text>
+<text x="363.25" y="461.00" fill="#848ea2">Arthur</text>
+<text x="428.56" y="461.00" fill="#848ea2">Masuaku</text>
+<text x="503.21" y="461.00" fill="#848ea2">↓</text>
+<text x="531.20" y="461.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="568.53" y="461.00" fill="#f0c458" font-weight="bold">89&#x27;</text>
+<text x="176.63" y="480.00" fill="#848ea2">Fiston</text>
+<text x="241.94" y="480.00" fill="#848ea2">Mayele</text>
+<text x="307.26" y="480.00" fill="#848ea2">↑</text>
+<text x="325.92" y="480.00" fill="#848ea2">Samuel</text>
+<text x="391.24" y="480.00" fill="#848ea2">Moutoussamy</text>
+<text x="503.21" y="480.00" fill="#848ea2">↓</text>
+<text x="531.20" y="480.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="568.53" y="480.00" fill="#f0c458" font-weight="bold">89&#x27;</text>
+<text x="549.87" y="499.00" fill="#f0c458" font-weight="bold">90&#x27;+1&#x27;</text>
+<text x="624.51" y="499.00" fill="#848ea2" text-anchor="middle">🔁</text>
+<text x="643.18" y="499.00" fill="#848ea2">John</text>
+<text x="689.83" y="499.00" fill="#848ea2">Stones</text>
+<text x="755.15" y="499.00" fill="#848ea2">↑</text>
+<text x="773.81" y="499.00" fill="#848ea2">Declan</text>
+<text x="839.13" y="499.00" fill="#848ea2">Rice</text>
+<text x="885.78" y="499.00" fill="#848ea2">↓</text>
+<text x="577.86" y="518.00" fill="#343c4e">┊</text>
+<text x="577.86" y="537.00" fill="#343c4e">┊</text>
+<text x="577.86" y="556.00" fill="#343c4e">┊</text>
+<text x="577.86" y="575.00" fill="#343c4e">┊</text>
+<text x="577.86" y="594.00" fill="#343c4e">┊</text>
+<text x="577.86" y="613.00" fill="#343c4e">┊</text>
+<text x="577.86" y="632.00" fill="#343c4e">┊</text>
+<text x="577.86" y="651.00" fill="#343c4e">┊</text>
+<text x="577.86" y="670.00" fill="#343c4e">┊</text>
+<text x="577.86" y="689.00" fill="#343c4e">┊</text>
+<text x="577.86" y="708.00" fill="#343c4e">┊</text>
+<text x="577.86" y="727.00" fill="#343c4e">┊</text>
+<text x="577.86" y="746.00" fill="#343c4e">┊</text>
+<text x="577.86" y="765.00" fill="#343c4e">┊</text>
+<text x="27.33" y="784.00" fill="#586074">updated</text>
+<text x="101.98" y="784.00" fill="#586074">11:37:43</text>
+<text x="36.66" y="803.00" fill="#f0c458" font-weight="bold">←→</text>
+<text x="73.99" y="803.00" fill="#848ea2">tabs</text>
+<text x="139.30" y="803.00" fill="#f0c458" font-weight="bold">↑↓</text>
+<text x="176.63" y="803.00" fill="#848ea2">scroll</text>
+<text x="260.61" y="803.00" fill="#f0c458" font-weight="bold">esc</text>
+<text x="307.26" y="803.00" fill="#848ea2">back</text>
+<text x="372.58" y="803.00" fill="#f0c458" font-weight="bold">:</text>
+<text x="400.57" y="803.00" fill="#848ea2">command</text>
+<text x="811.13" y="803.00" fill="#586074">next:</text>
+<text x="867.12" y="803.00" fill="#586074">SEN</text>
+<text x="904.44" y="803.00" fill="#586074">v</text>
+<text x="923.11" y="803.00" fill="#586074">BEL</text>
+<text x="960.43" y="803.00" fill="#586074">·</text>
+<text x="979.09" y="803.00" fill="#586074">kickoff</text>
+<text x="1053.74" y="803.00" fill="#586074">in</text>
+<text x="1081.73" y="803.00" fill="#586074">1h22m</text>
+</svg>

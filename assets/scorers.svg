@@ -1,0 +1,240 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1156" height="826" viewBox="0 0 1156 826" font-family="'DejaVu Sans Mono','Menlo','Consolas','Cascadia Code',monospace" font-size="15.5">
+<rect x="0" y="0" width="1156" height="826" rx="10" fill="#0c0e14"/>
+<rect x="0" y="0" width="1156" height="30" rx="10" fill="#1b1f2a"/>
+<rect x="0" y="20" width="1156" height="10" fill="#1b1f2a"/>
+<circle cx="18" cy="15" r="6" fill="#ff5f56"/>
+<circle cx="38" cy="15" r="6" fill="#ffbd2e"/>
+<circle cx="58" cy="15" r="6" fill="#27c93f"/>
+<text x="578" y="19" fill="#8a93a6" font-size="12.5" text-anchor="middle">wcup — golden boot race</text>
+<rect x="18.00" y="48.00" width="27.99" height="19.00" fill="#141821"/>
+<rect x="55.32" y="48.00" width="1082.40" height="19.00" fill="#141821"/>
+<rect x="18.00" y="67.00" width="419.89" height="19.00" fill="#141821"/>
+<rect x="437.89" y="67.00" width="102.64" height="19.00" fill="#58c682"/>
+<rect x="540.54" y="67.00" width="597.18" height="19.00" fill="#141821"/>
+<rect x="36.66" y="105.00" width="18.66" height="19.00" fill="#f0c458"/>
+<rect x="64.66" y="105.00" width="65.32" height="19.00" fill="#f0c458"/>
+<rect x="139.30" y="105.00" width="18.66" height="19.00" fill="#141821"/>
+<rect x="167.30" y="105.00" width="83.98" height="19.00" fill="#141821"/>
+<rect x="36.66" y="162.00" width="18.66" height="19.00" fill="#1e2430"/>
+<rect x="64.66" y="162.00" width="1054.40" height="19.00" fill="#1e2430"/>
+<rect x="18.00" y="770.00" width="1119.72" height="19.00" fill="#141821"/>
+<rect x="18.00" y="789.00" width="9.33" height="19.00" fill="#141821"/>
+<rect x="27.33" y="789.00" width="37.32" height="19.00" fill="#1e2430"/>
+<rect x="64.66" y="789.00" width="149.30" height="19.00" fill="#141821"/>
+<rect x="213.95" y="789.00" width="27.99" height="19.00" fill="#1e2430"/>
+<rect x="241.94" y="789.00" width="65.32" height="19.00" fill="#141821"/>
+<rect x="307.26" y="789.00" width="27.99" height="19.00" fill="#1e2430"/>
+<rect x="335.25" y="789.00" width="93.31" height="19.00" fill="#141821"/>
+<rect x="428.56" y="789.00" width="27.99" height="19.00" fill="#1e2430"/>
+<rect x="456.56" y="789.00" width="681.16" height="19.00" fill="#141821"/>
+<text x="45.99" y="62.00" fill="#5ad28c" text-anchor="middle">⚽</text>
+<text x="64.66" y="62.00" fill="#5ece9b" font-weight="bold">F</text>
+<text x="73.99" y="62.00" fill="#60cca3" font-weight="bold">I</text>
+<text x="83.32" y="62.00" fill="#62caaa" font-weight="bold">F</text>
+<text x="92.65" y="62.00" fill="#64c8b2" font-weight="bold">A</text>
+<text x="111.31" y="62.00" fill="#68c4c1" font-weight="bold">W</text>
+<text x="120.64" y="62.00" fill="#6ac2c9" font-weight="bold">O</text>
+<text x="129.97" y="62.00" fill="#6cc0d1" font-weight="bold">R</text>
+<text x="139.30" y="62.00" fill="#6ebed8" font-weight="bold">L</text>
+<text x="148.63" y="62.00" fill="#70bce0" font-weight="bold">D</text>
+<text x="167.30" y="62.00" fill="#74b8ef" font-weight="bold">C</text>
+<text x="176.63" y="62.00" fill="#76b6f7" font-weight="bold">U</text>
+<text x="185.96" y="62.00" fill="#78b4ff" font-weight="bold">P</text>
+<text x="204.62" y="62.00" fill="#f0c458" font-weight="bold">2026</text>
+<text x="251.27" y="62.00" fill="#586074">·</text>
+<text x="269.94" y="62.00" fill="#586074">USA</text>
+<text x="307.26" y="62.00" fill="#586074">·</text>
+<text x="325.92" y="62.00" fill="#586074">CAN</text>
+<text x="363.25" y="62.00" fill="#586074">·</text>
+<text x="381.91" y="62.00" fill="#586074">MEX</text>
+<text x="941.77" y="62.00" fill="#586074">○</text>
+<text x="960.43" y="62.00" fill="#586074">no</text>
+<text x="988.42" y="62.00" fill="#586074">live</text>
+<text x="1044.41" y="62.00" fill="#848ea2">11:37:41</text>
+<text x="27.33" y="81.00" fill="#848ea2">1</text>
+<text x="45.99" y="81.00" fill="#848ea2">Live</text>
+<text x="111.31" y="81.00" fill="#848ea2">2</text>
+<text x="129.97" y="81.00" fill="#848ea2">Schedule</text>
+<text x="232.61" y="81.00" fill="#848ea2">3</text>
+<text x="251.27" y="81.00" fill="#848ea2">Groups</text>
+<text x="335.25" y="81.00" fill="#848ea2">4</text>
+<text x="353.92" y="81.00" fill="#848ea2">Bracket</text>
+<text x="447.23" y="81.00" fill="#0c0e14" font-weight="bold">5</text>
+<text x="465.89" y="81.00" fill="#0c0e14" font-weight="bold">Scorers</text>
+<text x="979.09" y="81.00" fill="#586074">:help</text>
+<text x="1044.41" y="81.00" fill="#586074">·</text>
+<text x="1072.40" y="81.00" fill="#586074">q</text>
+<text x="1091.07" y="81.00" fill="#586074">quit</text>
+<text x="36.66" y="100.00" fill="#848ea2" font-style="italic">Tournament</text>
+<text x="139.30" y="100.00" fill="#848ea2" font-style="italic">leaders</text>
+<text x="213.95" y="100.00" fill="#848ea2" font-style="italic">·</text>
+<text x="232.61" y="100.00" fill="#848ea2" font-style="italic">golden</text>
+<text x="297.93" y="100.00" fill="#848ea2" font-style="italic">boot</text>
+<text x="344.58" y="100.00" fill="#848ea2" font-style="italic">race</text>
+<text x="55.32" y="119.00" fill="#0c0e14" text-anchor="middle">⚽</text>
+<text x="73.99" y="119.00" fill="#0c0e14" font-weight="bold">Goals</text>
+<text x="157.97" y="119.00" fill="#848ea2" text-anchor="middle">🅰</text>
+<text x="176.63" y="119.00" fill="#848ea2">Assists</text>
+<text x="969.76" y="119.00" fill="#586074">←→</text>
+<text x="997.75" y="119.00" fill="#586074">switch</text>
+<text x="1063.07" y="119.00" fill="#586074">board</text>
+<text x="36.66" y="138.00" fill="#343c4e">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="55.32" y="176.00" fill="#f0c458" text-anchor="middle">🥇</text>
+<text x="83.32" y="176.00" fill="#000080">●</text>
+<text x="101.98" y="176.00" fill="#dfe4ee" font-weight="bold">Kylian</text>
+<text x="167.30" y="176.00" fill="#dfe4ee" font-weight="bold">Mbappé</text>
+<text x="335.25" y="176.00" fill="#848ea2">FRA</text>
+<text x="391.24" y="176.00" fill="#000080">████████████████████████████████████████</text>
+<text x="773.81" y="176.00" fill="#f0c458" font-weight="bold">6</text>
+<text x="55.32" y="195.00" fill="#f0c458" text-anchor="middle">🥈</text>
+<text x="83.32" y="195.00" fill="#74acdf">●</text>
+<text x="101.98" y="195.00" fill="#dfe4ee" font-weight="bold">Lionel</text>
+<text x="167.30" y="195.00" fill="#dfe4ee" font-weight="bold">Messi</text>
+<text x="335.25" y="195.00" fill="#848ea2">ARG</text>
+<text x="391.24" y="195.00" fill="#74acdf">████████████████████████████████████████</text>
+<text x="773.81" y="195.00" fill="#f0c458" font-weight="bold">6</text>
+<text x="55.32" y="214.00" fill="#f0c458" text-anchor="middle">🥉</text>
+<text x="83.32" y="214.00" fill="#c8102e">●</text>
+<text x="101.98" y="214.00" fill="#dfe4ee" font-weight="bold">Erling</text>
+<text x="167.30" y="214.00" fill="#dfe4ee" font-weight="bold">Haaland</text>
+<text x="335.25" y="214.00" fill="#848ea2">NOR</text>
+<text x="391.24" y="214.00" fill="#c8102e">█████████████████████████████████</text>
+<text x="708.49" y="214.00" fill="#f0c458" font-weight="bold">5</text>
+<text x="55.32" y="233.00" fill="#f0c458">4</text>
+<text x="83.32" y="233.00" fill="#fee000">●</text>
+<text x="101.98" y="233.00" fill="#dfe4ee">Vinícius</text>
+<text x="185.96" y="233.00" fill="#dfe4ee">Júnior</text>
+<text x="335.25" y="233.00" fill="#848ea2">BRA</text>
+<text x="391.24" y="233.00" fill="#fee000">███████████████████████████</text>
+<text x="652.51" y="233.00" fill="#f0c458" font-weight="bold">4</text>
+<text x="55.32" y="252.00" fill="#f0c458">5</text>
+<text x="83.32" y="252.00" fill="#000080">●</text>
+<text x="101.98" y="252.00" fill="#dfe4ee">Ousmane</text>
+<text x="176.63" y="252.00" fill="#dfe4ee">Dembélé</text>
+<text x="335.25" y="252.00" fill="#848ea2">FRA</text>
+<text x="391.24" y="252.00" fill="#000080">███████████████████████████</text>
+<text x="652.51" y="252.00" fill="#f0c458" font-weight="bold">4</text>
+<text x="55.32" y="271.00" fill="#f0c458">6</text>
+<text x="83.32" y="271.00" fill="#fb5d00">●</text>
+<text x="101.98" y="271.00" fill="#dfe4ee">Cody</text>
+<text x="148.63" y="271.00" fill="#dfe4ee">Gakpo</text>
+<text x="335.25" y="271.00" fill="#848ea2">NED</text>
+<text x="391.24" y="271.00" fill="#fb5d00">████████████████████</text>
+<text x="587.19" y="271.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="55.32" y="290.00" fill="#f0c458">7</text>
+<text x="83.32" y="290.00" fill="#df2027">●</text>
+<text x="101.98" y="290.00" fill="#dfe4ee">Ismael</text>
+<text x="167.30" y="290.00" fill="#dfe4ee">Saibari</text>
+<text x="335.25" y="290.00" fill="#848ea2">MAR</text>
+<text x="391.24" y="290.00" fill="#df2027">████████████████████</text>
+<text x="587.19" y="290.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="55.32" y="309.00" fill="#f0c458">8</text>
+<text x="83.32" y="309.00" fill="#888888">●</text>
+<text x="101.98" y="309.00" fill="#dfe4ee">Kai</text>
+<text x="139.30" y="309.00" fill="#dfe4ee">Havertz</text>
+<text x="335.25" y="309.00" fill="#848ea2">GER</text>
+<text x="391.24" y="309.00" fill="#888888">████████████████████</text>
+<text x="587.19" y="309.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="55.32" y="328.00" fill="#f0c458">9</text>
+<text x="83.32" y="328.00" fill="#006847">●</text>
+<text x="101.98" y="328.00" fill="#dfe4ee">Julián</text>
+<text x="167.30" y="328.00" fill="#dfe4ee">Quiñones</text>
+<text x="335.25" y="328.00" fill="#848ea2">MEX</text>
+<text x="391.24" y="328.00" fill="#006847">████████████████████</text>
+<text x="587.19" y="328.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="347.00" fill="#f0c458">10</text>
+<text x="83.32" y="347.00" fill="#ed2224">●</text>
+<text x="101.98" y="347.00" fill="#dfe4ee">Jonathan</text>
+<text x="185.96" y="347.00" fill="#dfe4ee">David</text>
+<text x="335.25" y="347.00" fill="#848ea2">CAN</text>
+<text x="391.24" y="347.00" fill="#ed2224">████████████████████</text>
+<text x="587.19" y="347.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="366.00" fill="#f0c458">11</text>
+<text x="83.32" y="366.00" fill="#fee000">●</text>
+<text x="101.98" y="366.00" fill="#dfe4ee">Matheus</text>
+<text x="176.63" y="366.00" fill="#dfe4ee">Cunha</text>
+<text x="335.25" y="366.00" fill="#848ea2">BRA</text>
+<text x="391.24" y="366.00" fill="#fee000">████████████████████</text>
+<text x="587.19" y="366.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="385.00" fill="#f0c458">12</text>
+<text x="83.32" y="385.00" fill="#fb5d00">●</text>
+<text x="101.98" y="385.00" fill="#dfe4ee">Brian</text>
+<text x="157.97" y="385.00" fill="#dfe4ee">Brobbey</text>
+<text x="335.25" y="385.00" fill="#848ea2">NED</text>
+<text x="391.24" y="385.00" fill="#fb5d00">████████████████████</text>
+<text x="587.19" y="385.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="404.00" fill="#f0c458">13</text>
+<text x="83.32" y="404.00" fill="#888888">●</text>
+<text x="101.98" y="404.00" fill="#dfe4ee">Deniz</text>
+<text x="157.97" y="404.00" fill="#dfe4ee">Undav</text>
+<text x="335.25" y="404.00" fill="#848ea2">GER</text>
+<text x="391.24" y="404.00" fill="#888888">████████████████████</text>
+<text x="587.19" y="404.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="423.00" fill="#f0c458">14</text>
+<text x="83.32" y="423.00" fill="#418fde">●</text>
+<text x="101.98" y="423.00" fill="#dfe4ee">Yoane</text>
+<text x="157.97" y="423.00" fill="#dfe4ee">Wissa</text>
+<text x="335.25" y="423.00" fill="#848ea2">COD</text>
+<text x="391.24" y="423.00" fill="#418fde">████████████████████</text>
+<text x="587.19" y="423.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="442.00" fill="#f0c458">15</text>
+<text x="83.32" y="442.00" fill="#888888">●</text>
+<text x="101.98" y="442.00" fill="#dfe4ee">Elijah</text>
+<text x="167.30" y="442.00" fill="#dfe4ee">Just</text>
+<text x="335.25" y="442.00" fill="#848ea2">NZL</text>
+<text x="391.24" y="442.00" fill="#888888">████████████████████</text>
+<text x="587.19" y="442.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="461.00" fill="#f0c458">16</text>
+<text x="83.32" y="461.00" fill="#888888">●</text>
+<text x="101.98" y="461.00" fill="#dfe4ee">Harry</text>
+<text x="157.97" y="461.00" fill="#dfe4ee">Kane</text>
+<text x="335.25" y="461.00" fill="#848ea2">ENG</text>
+<text x="391.24" y="461.00" fill="#888888">████████████████████</text>
+<text x="587.19" y="461.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="480.00" fill="#f0c458">17</text>
+<text x="83.32" y="480.00" fill="#888888">●</text>
+<text x="101.98" y="480.00" fill="#dfe4ee">Ismaïla</text>
+<text x="176.63" y="480.00" fill="#dfe4ee">Sarr</text>
+<text x="335.25" y="480.00" fill="#848ea2">SEN</text>
+<text x="391.24" y="480.00" fill="#888888">████████████████████</text>
+<text x="587.19" y="480.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="499.00" fill="#f0c458">18</text>
+<text x="83.32" y="499.00" fill="#ff0000">●</text>
+<text x="101.98" y="499.00" fill="#dfe4ee">Johan</text>
+<text x="157.97" y="499.00" fill="#dfe4ee">Manzambi</text>
+<text x="335.25" y="499.00" fill="#848ea2">SUI</text>
+<text x="391.24" y="499.00" fill="#ff0000">████████████████████</text>
+<text x="587.19" y="499.00" fill="#f0c458" font-weight="bold">3</text>
+<text x="45.99" y="518.00" fill="#f0c458">19</text>
+<text x="83.32" y="518.00" fill="#fecb00">●</text>
+<text x="101.98" y="518.00" fill="#dfe4ee">Yasin</text>
+<text x="157.97" y="518.00" fill="#dfe4ee">Ayari</text>
+<text x="335.25" y="518.00" fill="#848ea2">SWE</text>
+<text x="391.24" y="518.00" fill="#fecb00">█████████████</text>
+<text x="521.87" y="518.00" fill="#f0c458" font-weight="bold">2</text>
+<text x="45.99" y="537.00" fill="#f0c458">20</text>
+<text x="83.32" y="537.00" fill="#000555">●</text>
+<text x="101.98" y="537.00" fill="#dfe4ee">Daichi</text>
+<text x="167.30" y="537.00" fill="#dfe4ee">Kamada</text>
+<text x="335.25" y="537.00" fill="#848ea2">JPN</text>
+<text x="391.24" y="537.00" fill="#000555">█████████████</text>
+<text x="521.87" y="537.00" fill="#f0c458" font-weight="bold">2</text>
+<text x="27.33" y="784.00" fill="#586074">updated</text>
+<text x="101.98" y="784.00" fill="#586074">11:37:40</text>
+<text x="36.66" y="803.00" fill="#f0c458" font-weight="bold">←→</text>
+<text x="73.99" y="803.00" fill="#848ea2">goals/assists</text>
+<text x="223.28" y="803.00" fill="#f0c458" font-weight="bold">⇥</text>
+<text x="251.27" y="803.00" fill="#848ea2">view</text>
+<text x="316.59" y="803.00" fill="#f0c458" font-weight="bold">:</text>
+<text x="344.58" y="803.00" fill="#848ea2">command</text>
+<text x="437.89" y="803.00" fill="#f0c458" font-weight="bold">q</text>
+<text x="465.89" y="803.00" fill="#848ea2">quit</text>
+<text x="811.13" y="803.00" fill="#586074">next:</text>
+<text x="867.12" y="803.00" fill="#586074">SEN</text>
+<text x="904.44" y="803.00" fill="#586074">v</text>
+<text x="923.11" y="803.00" fill="#586074">BEL</text>
+<text x="960.43" y="803.00" fill="#586074">·</text>
+<text x="979.09" y="803.00" fill="#586074">kickoff</text>
+<text x="1053.74" y="803.00" fill="#586074">in</text>
+<text x="1081.73" y="803.00" fill="#586074">1h22m</text>
+</svg>
