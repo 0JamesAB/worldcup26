@@ -29,26 +29,8 @@ def base():
     return bg(*P.bg0) + fg(*P.text)
 
 
-def lerp(a, b, t):
-    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-
-def gradient_put(cv, r, c, text, c0, c1, extra=""):
-    n = max(1, len(text) - 1)
-    x = c
-    for i, ch in enumerate(text):
-        col = lerp(c0, c1, i / n)
-        cv.put(r, x, ch, fg(*col) + extra)
-        x += term.char_width(ch)
-    return x
-
-
 def team_hex(tid=None, abbr=None):
     return espn.team_color(tid, abbr)
-
-
-def swatch(cv, r, c, tid=None, abbr=None, ch="●"):
-    cv.put(r, c, ch, bg(*P.bg1) if False else fg_hex(team_hex(tid, abbr)))
 
 
 def real_team(abbr):
@@ -171,10 +153,8 @@ def draw_odds_bars(cv, r, c, width, m, fillstyle, labelw=9):
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
         lbl_style = fillstyle + (fg(*P.white) + BOLD if i == favi else fg(*P.dim))
         cv.put(rr, c + 3, term.pad(_fit_label(name, abbr, labelw), labelw), lbl_style)
-        fill = min(barmax, int(round(p * barmax)))
-        cv.put(rr, bx, "█" * fill, fillstyle + col)
-        if barmax - fill > 0:
-            cv.put(rr, bx + fill, "░" * (barmax - fill), fillstyle + fg(*P.line))
+        widgets.draw_hbar(cv, rr, bx, barmax, p, fillstyle + col,
+                          fillstyle + fg(*P.line))
         cv.put(rr, bx + barmax + 1, f"{round(p * 100):>2}%",
                fillstyle + (fg(*P.text) + BOLD if i == favi else fg(*P.dim)))
     return 3
@@ -198,10 +178,7 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
         cv.put(r, cx, term.pad(_fit_label(name, abbr, labelw), labelw),
                fg(*P.text) + (BOLD if i == favi else ""))
-        fill = min(barmax, int(round(p * barmax)))
-        cv.put(r, bx, "█" * fill, col)
-        if barmax - fill > 0:
-            cv.put(r, bx + fill, "░" * (barmax - fill), fg(*P.line))
+        widgets.draw_hbar(cv, r, bx, barmax, p, col, fg(*P.line))
         cv.put(r, bx + barmax + 2, f"{round(p * 100):>2}%",
                fg(*P.text) + (BOLD if i == favi else ""))
         price = fmt_price(prices[i])
@@ -231,7 +208,7 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
 def draw_header(cv, cols, st, frame):
     cv.fill_rect(0, 0, 1, cols, bg(*P.bg1))
     # brand
-    x = gradient_put(cv, 0, 2, "⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
+    x = widgets.gradient_put(cv, 0, 2, "⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
                      extra=bg(*P.bg1) + BOLD)
     cv.put(0, x + 1, "2026", bg(*P.bg1) + fg(*P.gold) + BOLD)
     # host
@@ -918,9 +895,9 @@ def view_scorers(cv, top, bottom, cols, st, frame):
         cv.put(r, 9, term.pad(row["name"], 24), bgs + fg(*P.text) + (BOLD if i < 3 else ""))
         cv.put(r, 34, term.pad(row.get("team_abbr", ""), 5), bgs + fg(*P.dim))
         # bar — value sits right after the bar's fill so it tracks the bar length
-        filln = int(round(row["value"] / maxval * barmax))
         bx = 40
-        cv.put(r, bx, "█" * filln, bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
+        filln = widgets.draw_hbar(cv, r, bx, barmax, row["value"] / maxval,
+                                  bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
         cv.put(r, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
         r += 1
 
@@ -1203,42 +1180,18 @@ def draw_stats(cv, top, bottom, cols, m, detail):
     cv.put(top, 6, a, acol + BOLD)
     cv.put(top, cols - 6 - term.display_width(h), h, hcol + BOLD)
     cv.put(top, (cols - 8) // 2, "stat", fg(*P.faint))
-    # bar geometry
-    bar_l = 14
-    bar_r = cols - 14
-    barW = bar_r - bar_l
-    mid = (bar_l + bar_r) // 2
     r = top + 2
     for label, av, hv in rows:
         if r > bottom:
             break
-        cv.put(r, 6, term.pad(str(av), 6, "right"), acol + BOLD)
-        cv.put(r, cols - 12, term.pad(str(hv), 6), hcol + BOLD)
-        cv.put(r, (cols - term.display_width(label)) // 2, label, fg(*P.dim))
         # split bar centered: away grows left from mid, home grows right
-        af, hf = bar_fracs(av, hv)
-        an = int(round(af * (barW // 2)))
-        hn = int(round(hf * (barW // 2)))
-        track = bg(*P.bg1)
-        cv.fill_rect(r + 1, bar_l, 1, barW, track)
-        for i in range(an):
-            cv.put(r + 1, mid - 1 - i, "█", track + acol)
-        for i in range(hn):
-            cv.put(r + 1, mid + i, "█", track + hcol)
-        cv.put(r + 1, mid, "▏", track + fg(*P.faint))
-        r += 2
-
-
-def bar_fracs(av, hv):
-    try:
-        a = float(str(av).replace("%", ""))
-        h = float(str(hv).replace("%", ""))
-    except ValueError:
-        return 0.5, 0.5
-    tot = a + h
-    if tot <= 0:
-        return 0.0, 0.0
-    return a / tot, h / tot
+        r += widgets.draw_duel_row(cv, r, 6, cols - 12, label, av, hv,
+                                   acol, hcol,
+                                   label_style=fg(*P.dim),
+                                   track_style=bg(*P.bg1),
+                                   lval_style=acol + BOLD,
+                                   rval_style=hcol + BOLD,
+                                   divider_style=fg(*P.faint))
 
 
 # ----------------------------------------------------------------------------
@@ -1339,8 +1292,7 @@ def view_help(cv, top, bottom, cols, st, frame):
 # ----------------------------------------------------------------------------
 
 def center_msg(cv, top, bottom, cols, msg):
-    y = (top + bottom) // 2
-    cv.put(y, max(2, (cols - term.display_width(msg)) // 2), msg, fg(*P.dim) + ITALIC)
+    widgets.center_msg(cv, top, bottom, cols, msg, fg(*P.dim) + ITALIC)
 
 
 def context_label(st):
