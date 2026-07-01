@@ -70,6 +70,8 @@ def status_text(m, frame):
     if m.is_post:
         if m.has_shootout:
             return "FT · pens", fg(*P.dim)
+        if m.has_extra_time:
+            return "AET", fg(*P.dim) + BOLD
         return "FT", fg(*P.dim) + BOLD
     # pre
     local = espn.to_local(m.date)
@@ -467,7 +469,8 @@ def compact_status(m, frame):
         pulse = (frame // 3) % 2 == 0
         return (m.clock or "LIVE"), fg(*(P.live if pulse else (60, 150, 95))) + BOLD
     if m.is_post:
-        return ("FT · pens" if m.has_shootout else "FT"), fg(*P.dim) + BOLD
+        label = "FT · pens" if m.has_shootout else ("AET" if m.has_extra_time else "FT")
+        return label, fg(*P.dim) + BOLD
     return "—", fg(*P.faint)
 
 
@@ -1263,12 +1266,16 @@ def view_team(cv, top, bottom, cols, st, frame):
             sf, sa = side.score_int, opp.score_int
             if sf is not None and sa is not None:
                 gf += sf; ga += sa
-                if side.winner or sf > sa:
+                if side.winner:
                     w += 1
-                elif sf == sa:
-                    d += 1
-                else:
+                elif opp.winner:
                     l += 1
+                elif sf > sa:
+                    w += 1
+                elif sf < sa:
+                    l += 1
+                else:
+                    d += 1
         elif m.is_pre and nxt is None:
             nxt = m
     rec_txt = f"  P{w + d + l}  ·  {w}W {d}D {l}L  ·  {gf}-{ga}"
