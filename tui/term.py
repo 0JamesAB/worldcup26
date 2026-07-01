@@ -1,5 +1,5 @@
 """
-term.py - Terminal control layer for the World Cup TUI.
+term.py - Terminal control layer.
 
 Pure stdlib. Provides:
   - ANSI truecolor + style helpers (with graceful 256/16-color downgrade)
@@ -36,6 +36,19 @@ def _detect_color_depth():
     return "truecolor"
 
 COLOR_DEPTH = _detect_color_depth()
+
+
+def get_color_depth():
+    return COLOR_DEPTH
+
+
+def set_color_depth(depth):
+    """Override detection: 'truecolor', '256', or '16'."""
+    global COLOR_DEPTH
+    if depth not in ("truecolor", "256", "16"):
+        raise ValueError(f"bad color depth: {depth!r}")
+    COLOR_DEPTH = depth
+
 
 ESC = "\x1b"
 CSI = "\x1b["
@@ -119,25 +132,6 @@ NOBOLD = f"{CSI}22m"
 
 def style(text, *codes):
     return "".join(codes) + text + RESET
-
-
-# A small palette used across the app (FIFA-ish).
-class Palette:
-    bg0 = (12, 14, 20)        # app background
-    bg1 = (20, 24, 33)        # panel background
-    bg2 = (30, 36, 48)        # selected row
-    line = (52, 60, 78)       # borders
-    text = (223, 228, 238)    # primary text
-    dim = (132, 142, 162)     # secondary text
-    faint = (88, 96, 116)     # tertiary
-    accent = (88, 198, 130)   # green (live / brand)
-    accent2 = (120, 180, 255) # blue
-    gold = (240, 196, 88)     # scorers / highlight
-    red = (235, 92, 92)       # red cards / losses
-    yellow = (236, 200, 92)   # yellow cards
-    white = (245, 247, 252)
-    live = (90, 220, 140)
-    pitch = (32, 110, 64)
 
 
 # ----------------------------------------------------------------------------

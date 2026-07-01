@@ -18,8 +18,12 @@ from datetime import datetime, timezone
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
-import term
-from term import Key, RawTerminal, Renderer, read_key
+from tui import term
+from tui.term import Key, RawTerminal, Renderer, read_key
+from tui.theme import set_theme
+from palette import WorldCupTheme
+set_theme(WorldCupTheme)
+
 import espn
 import state as S
 import views

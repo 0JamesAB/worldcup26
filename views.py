@@ -3,7 +3,7 @@ views.py - All screen rendering for the World Cup TUI.
 
 render(state, cols, rows) -> list[str] (a full frame). Builds the chrome
 (header / tabs / status / footer) and dispatches to the active view, which
-draws onto a ui.Canvas.
+draws onto a tui Canvas.
 """
 
 import os
@@ -13,13 +13,12 @@ from datetime import datetime, timezone
 
 _FAR = datetime.max.replace(tzinfo=timezone.utc)
 
-import term
-import ui
+from tui import term, widgets
+from tui.canvas import Canvas, LIGHT, HEAVY
+from tui.term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
 import espn
 import state as S
-from term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
-from term import Palette as P
-from ui import LIGHT, HEAVY
+from palette import P
 
 
 # ----------------------------------------------------------------------------
@@ -257,7 +256,7 @@ def draw_header(cv, cols, st, frame):
 
 def draw_tabs(cv, cols, st):
     active = S.TAB_VIEWS.index(st.view) if st.view in S.TAB_VIEWS else -1
-    ui.tab_bar(cv, 1, 0, cols, S.TABS, active, hint="  :help  ·  q quit")
+    widgets.tab_bar(cv, 1, 0, cols, S.TABS, active, hint="  :help  ·  q quit")
 
 
 def draw_context(cv, cols, st, label):
@@ -374,7 +373,7 @@ def draw_footer(cv, cols, rows, st):
     r = rows - 1
     if st.command_mode:
         hints = [("⇥", "complete"), ("↑↓", "select"), ("↵", "run"), ("esc", "cancel")]
-        ui.footer(cv, r, 0, cols, hints, right="")
+        widgets.footer(cv, r, 0, cols, hints, right="")
         return
     common = [("↑↓", "move"), ("↵", "open"), ("⇥", "view"), (":", "command"), ("r", "refresh")]
     if st.view == S.SCHEDULE:
@@ -389,7 +388,7 @@ def draw_footer(cv, cols, rows, st):
         hints = [("esc", "back"), ("⇥", "view"), (":", "command"), ("q", "quit")]
     else:
         hints = common
-    ui.footer(cv, r, 0, cols, hints, right=footer_right(st))
+    widgets.footer(cv, r, 0, cols, hints, right=footer_right(st))
 
 
 # ----------------------------------------------------------------------------
@@ -790,7 +789,7 @@ def build_bracket_canvas(br, frame):
     n0 = max(1, len(numbered.get("round-of-32", [])) or 16)
     height = n0 * UNIT + 6
     width = len(KO_ORDER) * (CELL_W + COL_GAP) + 6
-    cv = ui.Canvas(width, height, bg(*P.bg0))
+    cv = Canvas(width, height, bg(*P.bg0))
 
     colx, x = {}, 2
     for slug in KO_ORDER:
@@ -1372,7 +1371,7 @@ def context_label(st):
 
 def render(state, cols, rows):
     st = state
-    cv = ui.Canvas(cols, rows, base())
+    cv = Canvas(cols, rows, base())
     with st.lock:
         st.frame += 1
         frame = st.frame
