@@ -1,11 +1,12 @@
 # ⚽ World Cup Terminal
 
 A terminal dashboard for following the **2026 FIFA World Cup** live — scores,
-goalscorers, lineups, group tables, the knockout bracket and the golden-boot race —
-all in your terminal, updating live, driven entirely by the keyboard.
+goalscorers, lineups, group tables, the knockout bracket, the golden-boot race
+and **win-probability odds** — all in your terminal, updating live, driven
+entirely by the keyboard.
 
-**No dependencies. No API key. Pure Python 3 standard library.** Data comes from
-ESPN's public JSON feeds.
+**No dependencies. No API key. Pure Python 3 standard library.** Data (odds
+included) comes from ESPN's public JSON feeds.
 
 <p align="center">
   <img src="assets/live.svg" alt="Live scores — today's Round-of-32 matches as cards with live clock, score and goalscorers" width="820">
@@ -58,7 +59,7 @@ wcup --snapshot 120x40 bracket   # render one frame to stdout (no TTY) — good 
 
 | Key | View       | What you get                                                            |
 |-----|------------|-------------------------------------------------------------------------|
-| `1` | **Live**   | Today's matches as cards — live clock, score, and who scored when.      |
+| `1` | **Live**   | Today's matches as cards — live clock, score, who scored when, and win-probability odds for upcoming games. |
 | `2` | **Schedule** | Browse fixtures by day (`←/→`); kickoff times in your local timezone. |
 | `3` | **Groups** | All 12 group tables, colour-coded by who's advancing.                   |
 | `4` | **Bracket**| The full knockout tree, Round of 32 → Final, with connectors & shootouts.|
@@ -88,6 +89,38 @@ Press **Enter** on any match to open the **Match Centre**:
     <td width="34%"><img src="assets/stats.svg" alt="Head-to-head match statistics as mirrored bars"><br><sub><b>Stats</b></sub></td>
   </tr>
 </table>
+
+---
+
+## Odds
+
+Upcoming matches show **win-probability odds** — a bar per outcome (home · draw ·
+away), sized by the market's implied chance and coloured by team:
+
+<p align="center">
+  <img src="assets/live.svg" alt="Live cards with per-outcome win-probability odds bars" width="820">
+</p>
+
+* **No key, no setup.** The odds ride along in the same ESPN scoreboard feed the
+  app already fetches (ESPN embeds a sportsbook's lines — DraftKings in the US).
+  No account, no extra request, no new dependency.
+* **Vig-removed.** The three American moneyline prices are converted to implied
+  probabilities and normalised so they sum to 100% — an honest read of the
+  market, not the bookmaker's padded numbers.
+* **Graceful by design.** Odds appear only where the feed prices a game, so they
+  simply don't show for finished matches, for fixtures not yet priced (e.g. a
+  Round-of-16 tie whose teams are still TBD), or if the feed omits them. Nothing
+  to configure and nothing breaks when they're absent.
+* **In the Match Centre**, a compact moneyline strip sits under the score on
+  every tab, and a fuller panel (with over/under and spread) fills the Lineups
+  tab until the teamsheets drop ~1h before kick-off.
+
+**Tuning** (both optional):
+
+| Env var | Effect |
+|---------|--------|
+| `WCUP_ODDS=off` | Hide odds entirely. |
+| `WCUP_ODDS_FORMAT=decimal` | Show decimal prices (`2.15`) instead of American (`+115`). |
 
 ---
 
@@ -127,8 +160,9 @@ So `:` → `te` → `⇥` → `bra` → `⇥` → `↵` walks you straight to Br
 ## How it works
 
 * **`espn.py`** – thin client over ESPN's public World Cup JSON (scoreboard, match
-  summary, standings, leaders), with a thread-safe TTL cache and stale-on-error
-  fallback so a dropped connection just shows a "reconnecting" hint.
+  summary, standings, leaders, embedded odds), with a thread-safe TTL cache and
+  stale-on-error fallback so a dropped connection just shows a "reconnecting" hint.
+  Also holds the odds model and the American→probability/decimal conversions.
 * **`state.py`** – app state + a background refresher thread that keeps the active
   view fresh (live scores every ~12 s) and raises a goal/kick-off/FT toast when a
   scoreline changes.
