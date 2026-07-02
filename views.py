@@ -141,49 +141,50 @@ def _fit_label(name, abbr, w):
     return name if term.display_width(name) <= w else abbr
 
 
-def draw_odds_bars(cv, r, c, width, m, fillstyle, labelw=9):
-    """Three implied-probability bars (home / draw / away). Returns rows used."""
+def draw_odds_bars(rg, r, m, fillstyle, labelw=9):
+    """Three implied-probability bars (home / draw / away) drawn into the
+    card-inner Region `rg` starting at local row `r`. Returns rows used."""
     od = m.odds
     rows = _prob_rows(m, od)
     favi = max(range(3), key=lambda i: rows[i][3])
-    bx = c + 3 + labelw + 1
-    barmax = max(6, (c + width - 2) - bx - 7)
+    bx = labelw + 2
+    barmax = max(6, rg.w - labelw - 9)
     for i, (name, abbr, hexcol, p) in enumerate(rows):
         rr = r + i
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
         lbl_style = fillstyle + (fg(*P.white) + BOLD if i == favi else fg(*P.dim))
-        cv.put(rr, c + 3, term.pad(_fit_label(name, abbr, labelw), labelw), lbl_style)
-        widgets.draw_hbar(cv, rr, bx, barmax, p, fillstyle + col,
-                          fillstyle + fg(*P.line))
-        cv.put(rr, bx + barmax + 1, f"{round(p * 100):>2}%",
+        rg.put(rr, 1, term.pad(_fit_label(name, abbr, labelw), labelw), lbl_style)
+        rg.hbar(p, fillstyle + col, r=rr, c=bx, w=barmax,
+                track_style=fillstyle + fg(*P.line))
+        rg.put(rr, bx + barmax + 1, f"{round(p * 100):>2}%",
                fillstyle + (fg(*P.text) + BOLD if i == favi else fg(*P.dim)))
     return 3
 
 
-def draw_odds_panel(cv, top, bottom, cols, m, od):
-    """A fuller odds panel for the match-centre body (pre-match)."""
-    bw = min(66, cols - 6)
-    cx = max(2, (cols - bw) // 2)
-    cv.put(top + 1, cx, "Match odds — implied win probability", fg(*P.gold) + BOLD)
+def draw_odds_panel(rg, m, od):
+    """A fuller odds panel for the match-centre body Region (pre-match)."""
+    bw = min(66, rg.w - 6)
+    cx = max(2, (rg.w - bw) // 2)
+    rg.put(1, cx, "Match odds — implied win probability", fg(*P.gold) + BOLD)
     if od.provider:
-        cv.put(top + 1, cx + bw - term.display_width(od.provider), od.provider, fg(*P.faint))
+        rg.put(1, cx + bw - term.display_width(od.provider), od.provider, fg(*P.faint))
     rows = _prob_rows(m, od)
     prices = [od.ml_home, od.ml_draw, od.ml_away]
     favi = max(range(3), key=lambda i: rows[i][3])
     labelw = 18
     bx = cx + labelw + 1
     barmax = max(8, bw - labelw - 12)
-    r = top + 3
+    r = 3
     for i, (name, abbr, hexcol, p) in enumerate(rows):
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
-        cv.put(r, cx, term.pad(_fit_label(name, abbr, labelw), labelw),
+        rg.put(r, cx, term.pad(_fit_label(name, abbr, labelw), labelw),
                fg(*P.text) + (BOLD if i == favi else ""))
-        widgets.draw_hbar(cv, r, bx, barmax, p, col, fg(*P.line))
-        cv.put(r, bx + barmax + 2, f"{round(p * 100):>2}%",
+        rg.hbar(p, col, r=r, c=bx, w=barmax, track_style=fg(*P.line))
+        rg.put(r, bx + barmax + 2, f"{round(p * 100):>2}%",
                fg(*P.text) + (BOLD if i == favi else ""))
         price = fmt_price(prices[i])
         if price:
-            cv.put(r, bx + barmax + 7, price, fg(*P.dim))
+            rg.put(r, bx + barmax + 7, price, fg(*P.dim))
         r += 1
     extras = []
     if od.over_under is not None:
@@ -197,8 +198,8 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
             sp += f" {fmt_price(od.spread_odds)}"
         extras.append(sp)
     if extras:
-        cv.put(r + 1, cx, "     ".join(extras), fg(*P.dim))
-    cv.put(r + 2, cx, "Lineups drop ~1h before kickoff.", fg(*P.faint) + ITALIC)
+        rg.put(r + 1, cx, "     ".join(extras), fg(*P.dim))
+    rg.put(r + 2, cx, "Lineups drop ~1h before kickoff.", fg(*P.faint) + ITALIC)
 
 
 # ----------------------------------------------------------------------------
@@ -375,11 +376,10 @@ def card_rows(m):
     return 8 if (m.is_pre and match_odds(m)) else 5
 
 
-def draw_match_card(cv, r, c, width, m, selected, frame):
-    """A match card. 4 rows tall, or 7 when pre-match odds bars are shown.
-    Returns rows consumed (incl. a 1-row gap)."""
+def draw_match_card(card, m, selected, frame):
+    """A match card filling the Region `card` (4 rows tall, or 7 when
+    pre-match odds bars are shown — size it with card_rows)."""
     show_odds = m.is_pre and match_odds(m)
-    h = 7 if show_odds else 4
     if m.is_live:
         border = fg(*P.live)
     elif m.is_post:
@@ -397,42 +397,37 @@ def draw_match_card(cv, r, c, width, m, selected, frame):
         title += f" · {venue}"
     title += " "
     stxt, sstyle = status_text(m, frame)
-    widgets.draw_card(cv, r, c, h, width, border_style=border,
-                      fill_style=fillstyle, chars=LIGHT,
+    inner = card.card(border_style=border, fill_style=fillstyle, chars=LIGHT,
                       title=title, title_style=fillstyle + fg(*P.dim),
                       right=stxt, right_style=fillstyle + sstyle,
                       selected=selected, select_style=fg(*P.gold) + BOLD)
 
     # two team rows: away then home
     for i, comp in enumerate((m.away, m.home)):
-        rr = r + 1 + i
         if not comp:
             continue
-        x = c + 2
-        cv.put(rr, x, "●", fillstyle + fg_hex(team_hex(comp.id, comp.abbr)))
+        inner.put(i, 0, "●", fillstyle + fg_hex(team_hex(comp.id, comp.abbr)))
         is_win = comp.winner and m.is_post
         nstyle = fillstyle + (fg(*P.white) + BOLD if is_win else fg(*P.text))
-        name = comp.name
-        cv.put(rr, x + 2, term.strip_ansi(term.truncate(name, 18)), nstyle)
+        inner.put(i, 2, comp.name, nstyle, max_w=18)
         # score
         sc = score_str(comp)
         sstyle2 = fillstyle + (fg(*P.gold) + BOLD if (is_win or m.is_live) else fg(*P.text) + BOLD)
         if m.is_pre:
             sc = ""
-        cv.put(rr, c + 24, term.pad(sc, 7, "right"), sstyle2)
+        inner.put(i, 22, term.pad(sc, 7, "right"), sstyle2)
         # scorers
-        gtxt = team_goals_text(m, comp, width - 34)
+        gtxt = team_goals_text(m, comp, inner.w - 31)
         if gtxt:
-            cv.put(rr, c + 33, gtxt, fillstyle + fg(*P.faint))
+            inner.put(i, 31, gtxt, fillstyle + fg(*P.faint))
         elif m.is_pre and comp.form:
-            cv.put(rr, c + 33, "form " + comp.form, fillstyle + fg(*P.faint))
+            inner.put(i, 31, "form " + comp.form, fillstyle + fg(*P.faint))
 
     if show_odds:
-        draw_odds_bars(cv, r + 3, c, width, m, fillstyle)
+        draw_odds_bars(inner, 2, m, fillstyle)
         prov = f" {m.odds.provider or 'odds'} "
-        cv.put(r + h - 1, c + max(2, (width - term.display_width(prov)) // 2),
-               prov, fg(*P.faint))
-    return h + 1
+        card.put(card.h - 1, max(2, (card.w - term.display_width(prov)) // 2),
+                 prov, fg(*P.faint))
 
 
 def compact_status(m, frame):
@@ -486,42 +481,45 @@ def draw_compact_row(row, m, selected, frame, left="time"):
 # views
 # ----------------------------------------------------------------------------
 
-def view_live(cv, top, bottom, cols, st, frame):
+def view_live(rg, st, frame):
+    """Today's match cards. `rg` includes the context row (local row 0) so
+    the overflow counter can sit there; cards fill the body below it."""
+    body = rg.rows(1)
     matches = list(st.matches_today)
     if not matches:
-        center_msg(cv, top, bottom, cols, "No matches today.  Try  :schedule  to browse fixtures.")
+        center_msg(body, 0, body.h - 1, body.w, "No matches today.  Try  :schedule  to browse fixtures.")
         return
     # order: live first, then pre, then post
     order = {"in": 0, "pre": 1, "post": 2}
     matches.sort(key=lambda m: (order.get(m.state, 3), m.date or _FAR))
     st.live_sel = max(0, min(st.live_sel, len(matches) - 1))
 
-    card_w = min(78, cols - 4)
-    col_x = max(2, (cols - card_w) // 2)
+    card_w = min(78, rg.w - 4)
+    col_x = max(2, (rg.w - card_w) // 2)
     # Cards vary in height (pre-match cards carry odds bars), so scroll by
     # advancing the start index until the selected card fits on screen.
-    avail = bottom - top + 1
+    avail = body.h
     start = 0
     # advance `start` until the run start..sel fits; keep the running sum O(n)
     used = sum(card_rows(matches[k]) for k in range(st.live_sel + 1))
     while start < st.live_sel and used > avail:
         used -= card_rows(matches[start])
         start += 1
-    r = top
+    r = 0
     shown = 0
     for i in range(start, len(matches)):
         cons = card_rows(matches[i])
         # box occupies cons-1 rows; keep whole cards (but always draw the first)
-        if shown > 0 and r + cons - 2 > bottom:
+        if shown > 0 and r + cons - 2 > body.h - 1:
             break
-        draw_match_card(cv, r, col_x, card_w, matches[i], i == st.live_sel, frame)
-        st.hits.add(r, col_x, cons - 1, card_w, ("sel", "live_sel", i, True))
+        card = body.sub(r, col_x, cons - 1, card_w)
+        draw_match_card(card, matches[i], i == st.live_sel, frame)
+        card.hit(("sel", "live_sel", i, True))
         r += cons
         shown += 1
     if shown < len(matches):
-        # counter on the context row (top-1), clear of the cards
-        cnt = f"▲▼ {st.live_sel + 1}/{len(matches)}"
-        cv.put(top - 1, cols - term.display_width(cnt) - 2, cnt, fg(*P.faint))
+        # counter on the context row, clear of the cards
+        rg.right(f"▲▼ {st.live_sel + 1}/{len(matches)}", fg(*P.faint), pad=2)
 
 
 def view_schedule(rg, st, frame):
@@ -951,7 +949,7 @@ def draw_lineups(cv, top, bottom, cols, m, detail):
     if not detail.lineups:
         od = match_odds(m, detail)
         if od:
-            draw_odds_panel(cv, top, bottom, cols, m, od)
+            draw_odds_panel(cv.region(top, 0, bottom - top + 1, cols), m, od)
         else:
             center_msg(cv, top, bottom, cols, "Lineups not available yet (released ~1h before kickoff).")
         return
@@ -1290,7 +1288,7 @@ def render(state, cols, rows):
             body = root.rows(top, -2)   # rows [top .. bottom] of the screen
             v = st.view
             if v == S.LIVE:
-                view_live(cv, top, bottom, cols, st, frame)
+                view_live(root.rows(top - 1, -2), st, frame)
             elif v == S.SCHEDULE:
                 view_schedule(body, st, frame)
             elif v == S.GROUPS:
