@@ -3,7 +3,7 @@
 import unittest
 
 from tui import term, widgets
-from tui.theme import Theme, get_theme, set_theme
+from tui.theme import Theme, get_theme, set_theme, styles
 
 
 class ThemeCase(unittest.TestCase):
@@ -91,6 +91,52 @@ class TestTabBarOverflow(unittest.TestCase):
         # nothing drawn past the bar region either
         row = "".join(c.ch for c in cv.grid[0])
         self.assertEqual(row[14:].strip(), "")
+
+
+class TestStyles(ThemeCase):
+    def test_combos_match_hand_concatenation(self):
+        t = Theme
+        st = styles(t)
+        bg, fg = term.bg, term.fg
+        expected = {
+            "base": bg(*t.bg0) + fg(*t.text),
+            "panel": bg(*t.bg1) + fg(*t.text),
+            "panel_dim": bg(*t.bg1) + fg(*t.dim),
+            "panel_faint": bg(*t.bg1) + fg(*t.faint),
+            "panel_text_b": bg(*t.bg1) + fg(*t.text) + term.BOLD,
+            "panel_dim_b": bg(*t.bg1) + fg(*t.dim) + term.BOLD,
+            "panel_hl": bg(*t.bg1) + fg(*t.highlight),
+            "panel_hl_b": bg(*t.bg1) + fg(*t.highlight) + term.BOLD,
+            "raised": bg(*t.bg2) + fg(*t.text),
+            "raised_dim": bg(*t.bg2) + fg(*t.dim),
+            "chip": bg(*t.accent) + fg(*t.bg0) + term.BOLD,
+            "hint": bg(*t.bg1) + fg(*t.faint),
+        }
+        self.assertEqual(set(expected), set(type(st).__slots__))
+        for name, want in expected.items():
+            self.assertEqual(getattr(st, name), want, name)
+
+    def test_default_theme_is_installed_theme(self):
+        set_theme(Loud)
+        self.assertIs(styles(), styles(Loud))
+
+    def test_cache_returns_same_object(self):
+        self.assertIs(styles(Theme), styles(Theme))
+
+    def test_depth_change_gives_different_strings(self):
+        tc = styles(Theme)
+        term.set_color_depth("256")
+        st = styles(Theme)
+        self.assertIsNot(st, tc)
+        self.assertNotEqual(st.panel, tc.panel)
+        self.assertEqual(st.panel, term.bg(*Theme.bg1) + term.fg(*Theme.text))
+        term.set_color_depth("truecolor")
+        self.assertIs(styles(Theme), tc)
+
+    def test_subclass_gets_its_own_entry(self):
+        st = styles(Loud)
+        self.assertIsNot(st, styles(Theme))
+        self.assertEqual(st.base, term.bg(1, 1, 1) + term.fg(250, 250, 250))
 
 
 if __name__ == "__main__":
