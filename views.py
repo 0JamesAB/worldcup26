@@ -624,43 +624,27 @@ def draw_group_table(rg, g):
              rule_style=fg(*P.line), header_style=fg(*P.faint))
 
 
-def view_bracket(cv, top, bottom, cols, st, frame):
+def view_bracket(rg, st, frame):
     br = st.bracket
     if not br or not any(br.values()):
-        center_msg(cv, top, bottom, cols, "Loading knockout bracket…")
+        center_msg(rg, 0, rg.h - 1, rg.w, "Loading knockout bracket…")
         return
     big, cells = build_bracket_canvas(br, frame)
-    vh = bottom - top + 1
-    vw = cols - 2
+    body = rg.cols(2)   # viewport onto the oversized bracket canvas
+    vh, vw = body.h, body.w
     st.bracket_scroll_y = max(0, min(st.bracket_scroll_y, max(0, big.h - vh)))
     st.bracket_scroll_x = max(0, min(st.bracket_scroll_x, max(0, big.w - vw)))
     oy, ox = st.bracket_scroll_y, st.bracket_scroll_x
+    body.blit(big, src_r=oy, src_c=ox)
     # register the visible slice of each match box as clickable
     for cy, cx, m in cells:
         if not m:
             continue
-        r0 = top + (cy - 1) - oy          # box top row on screen
-        c0 = 2 + cx - ox
-        rr = max(r0, top)
-        rc = max(c0, 2)
-        rh = min(r0 + 4, bottom + 1) - rr
-        rw = min(c0 + CELL_W, 2 + vw) - rc
-        st.hits.add(rr, rc, rh, rw, ("open", m.id))
-    for y in range(vh):
-        sy = y + oy
-        if sy >= big.h:
-            break
-        for x in range(vw):
-            sx = x + ox
-            if sx >= big.w:
-                break
-            src = big.grid[sy][sx]
-            dst = cv.grid[top + y][2 + x]
-            dst.ch, dst.style, dst.cont = src.ch, src.style, src.cont
+        body.hit(("open", m.id), r=(cy - 1) - oy, c=cx - ox, h=4, w=CELL_W)
     # scroll position indicator on the context strip area (row 2 handled elsewhere)
     if big.h > vh:
         pct = int(100 * oy / max(1, big.h - vh))
-        cv.put(top, cols - 9, f"{pct:>3}% ▼", bg(*P.bg0) + fg(*P.faint))
+        rg.put(0, rg.w - 9, f"{pct:>3}% ▼", bg(*P.bg0) + fg(*P.faint))
 
 
 CELL_W = 20
@@ -1288,7 +1272,7 @@ def render(state, cols, rows):
             elif v == S.GROUPS:
                 view_groups(body, st, frame)
             elif v == S.BRACKET:
-                view_bracket(cv, top, bottom, cols, st, frame)
+                view_bracket(body, st, frame)
             elif v == S.SCORERS:
                 view_scorers(body, st, frame)
             elif v == S.DETAIL:
