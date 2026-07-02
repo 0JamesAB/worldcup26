@@ -445,40 +445,41 @@ def compact_status(m, frame):
     return "—", fg(*P.faint)
 
 
-def draw_compact_row(cv, r, c, width, m, selected, frame, left="time"):
+def draw_compact_row(row, m, selected, frame, left="time"):
+    """One fixture line in a full-width single-row Region (2-col gutters)."""
     fillstyle = bg(*(P.bg2 if selected else P.bg0))
-    cv.fill_rect(r, c, 1, width, fillstyle)
+    row.fill_rect(0, 2, 1, row.w - 4, fillstyle)
     if selected:
-        cv.put(r, c, "▸", fg(*P.gold) + BOLD)
+        row.put(0, 2, "▸", fg(*P.gold) + BOLD)
     local = espn.to_local(m.date)
     if left == "date":
         tstr = local.strftime("%b %d") if local else "--"
     else:
         tstr = local.strftime("%H:%M") if local else "--:--"
-    cv.put(r, c + 2, term.pad(tstr, 6), fillstyle + fg(*P.faint))
+    row.put(0, 4, term.pad(tstr, 6), fillstyle + fg(*P.faint))
     a, hh = m.away, m.home
     aw = bool(a and a.winner and m.is_post)
     hw = bool(hh and hh.winner and m.is_post)
-    x = c + 9
+    x = 11
     if a:
-        cv.put(r, x, "●", fillstyle + fg_hex(team_hex(a.id, a.abbr)))
-        cv.put(r, x + 2, term.pad(term.strip_ansi(term.truncate(a.name, 18)), 18),
-               fillstyle + (fg(*P.white) + BOLD if aw else fg(*P.text)))
+        row.put(0, x, "●", fillstyle + fg_hex(team_hex(a.id, a.abbr)))
+        row.put(0, x + 2, term.pad(term.strip_ansi(term.truncate(a.name, 18)), 18),
+                fillstyle + (fg(*P.white) + BOLD if aw else fg(*P.text)))
     sa = score_str(a) if not m.is_pre else ""
     sh = score_str(hh) if not m.is_pre else ""
     mid = f"{sa} - {sh}" if not m.is_pre else "v"
-    cv.put(r, x + 21, term.pad(mid, 9, "center"),
-           fillstyle + (fg(*P.gold) + BOLD if m.is_live else fg(*P.text) + BOLD))
+    row.put(0, x + 21, term.pad(mid, 9, "center"),
+            fillstyle + (fg(*P.gold) + BOLD if m.is_live else fg(*P.text) + BOLD))
     if hh:
-        cv.put(r, x + 31, "●", fillstyle + fg_hex(team_hex(hh.id, hh.abbr)))
-        cv.put(r, x + 33, term.pad(term.strip_ansi(term.truncate(hh.name, 18)), 18),
-               fillstyle + (fg(*P.white) + BOLD if hw else fg(*P.text)))
+        row.put(0, x + 31, "●", fillstyle + fg_hex(team_hex(hh.id, hh.abbr)))
+        row.put(0, x + 33, term.pad(term.strip_ansi(term.truncate(hh.name, 18)), 18),
+                fillstyle + (fg(*P.white) + BOLD if hw else fg(*P.text)))
     cs, cstyle = compact_status(m, frame)
-    cv.put(r, x + 52, term.pad(term.strip_ansi(cs), 10), fillstyle + cstyle)
+    row.put(0, x + 52, term.pad(term.strip_ansi(cs), 10), fillstyle + cstyle)
     vx = x + 63
-    if m.venue and vx < c + width - 4:
-        cv.put(r, vx, term.strip_ansi(term.truncate(m.venue, c + width - vx - 1)),
-               fillstyle + fg(*P.faint))
+    if m.venue and vx < row.w - 6:
+        row.put(0, vx, term.strip_ansi(term.truncate(m.venue, row.w - vx - 3)),
+                fillstyle + fg(*P.faint))
 
 
 # ----------------------------------------------------------------------------
@@ -523,7 +524,7 @@ def view_live(cv, top, bottom, cols, st, frame):
         cv.put(top - 1, cols - term.display_width(cnt) - 2, cnt, fg(*P.faint))
 
 
-def view_schedule(cv, top, bottom, cols, st, frame):
+def view_schedule(rg, st, frame):
     # date nav header
     d = st.schedule_date
     try:
@@ -532,31 +533,32 @@ def view_schedule(cv, top, bottom, cols, st, frame):
     except ValueError:
         dstr = d
     nav = f"◂  {dstr}  ▸"
-    nx = max(2, (cols - term.display_width(nav)) // 2)
-    cv.put(top, nx, nav, fg(*P.text) + BOLD)
+    nx = max(2, (rg.w - term.display_width(nav)) // 2)
+    rg.put(0, nx, nav, fg(*P.text) + BOLD)
     nw = term.display_width(nav)
-    st.hits.add(top, nx - 1, 1, 3, ("sched_day", -1))
-    st.hits.add(top, nx + nw - 2, 1, 3, ("sched_day", 1))
+    rg.hit(("sched_day", -1), 0, nx - 1, 1, 3)
+    rg.hit(("sched_day", 1), 0, nx + nw - 2, 1, 3)
     if st.schedule_label:
-        cv.put(top, 2, st.schedule_label, fg(*P.gold))
+        rg.put(0, 2, st.schedule_label, fg(*P.gold))
     if "schedule" in st.loading:
-        cv.put(top, cols - 12, "loading…", fg(*P.faint) + ITALIC)
-    cv.hline(top + 1, 2, cols - 4, fg(*P.line))
+        rg.put(0, rg.w - 12, "loading…", fg(*P.faint) + ITALIC)
+    rg.hline(1, 2, rg.w - 4, fg(*P.line))
 
     matches = list(st.schedule_matches)
     if not matches:
-        center_msg(cv, top + 2, bottom, cols, "No fixtures on this date.   ←/→ to change day")
+        center_msg(rg, 2, rg.h - 1, rg.w, "No fixtures on this date.   ←/→ to change day")
         return
     st.sched_sel = max(0, min(st.sched_sel, len(matches) - 1))
-    r = top + 2
+    r = 2
     # simple scroll window
-    avail = bottom - r + 1
+    avail = rg.h - r
     start = max(0, st.sched_sel - avail + 2) if st.sched_sel >= avail else 0
     for i in range(start, len(matches)):
-        if r > bottom:
+        if r >= rg.h:
             break
-        draw_compact_row(cv, r, 2, cols - 4, matches[i], i == st.sched_sel, frame)
-        st.hits.add(r, 2, 1, cols - 4, ("sel", "sched_sel", i, True))
+        row = rg.rows(r, r + 1)
+        draw_compact_row(row, matches[i], i == st.sched_sel, frame)
+        row.hit(("sel", "sched_sel", i, True), 0, 2, 1, row.w - 4)
         r += 1
 
 
@@ -1144,15 +1146,15 @@ def draw_stats(cv, top, bottom, cols, m, detail):
 # team view
 # ----------------------------------------------------------------------------
 
-def view_team(cv, top, bottom, cols, st, frame):
+def view_team(rg, st, frame):
     name = getattr(st, "team_query", "")
     abbr = getattr(st, "team_abbr", "")
     rec = espn.fetch_team_colors().get(abbr, {})
     col = team_hex(abbr=abbr)
-    cv.fill_rect(top, 0, 2, cols, bg(*P.bg1))
-    cv.put(top, 2, "███ ", bg(*P.bg1) + fg_hex(col))
-    cv.put(top, 6, name, bg(*P.bg1) + fg(*P.white) + BOLD)
-    cv.put(top, 6 + term.display_width(name) + 2, abbr, bg(*P.bg1) + fg_hex(col) + BOLD)
+    rg.fill_rect(0, 0, 2, rg.w, bg(*P.bg1))
+    rg.put(0, 2, "███ ", bg(*P.bg1) + fg_hex(col))
+    rg.put(0, 6, name, bg(*P.bg1) + fg(*P.white) + BOLD)
+    rg.put(0, 6 + term.display_width(name) + 2, abbr, bg(*P.bg1) + fg_hex(col) + BOLD)
     matches = getattr(st, "team_matches", [])
     # record summary (played matches only)
     w = d = l = gf = ga = 0
@@ -1177,24 +1179,25 @@ def view_team(cv, top, bottom, cols, st, frame):
         elif m.is_pre and nxt is None:
             nxt = m
     rec_txt = f"  P{w + d + l}  ·  {w}W {d}D {l}L  ·  {gf}-{ga}"
-    cv.put(top + 1, 6, rec_txt, bg(*P.bg1) + fg(*P.dim))
+    rg.put(1, 6, rec_txt, bg(*P.bg1) + fg(*P.dim))
     if nxt:
         opp = nxt.away if (nxt.home and nxt.home.abbr == abbr) else nxt.home
         local = espn.to_local(nxt.date)
         when = local.strftime("%a %d %b · %H:%M") if local else ""
         nt = f"next: vs {opp.abbr if opp else '?'}  {when}"
-        cv.put(top + 1, cols - term.display_width(nt) - 2, nt, bg(*P.bg1) + fg(*P.accent2))
-    cv.hline(top + 2, 2, cols - 4, fg(*P.line))
+        rg.put(1, rg.w - term.display_width(nt) - 2, nt, bg(*P.bg1) + fg(*P.accent2))
+    rg.hline(2, 2, rg.w - 4, fg(*P.line))
     if not matches:
-        center_msg(cv, top + 3, bottom, cols, "Loading team fixtures…")
+        center_msg(rg, 3, rg.h - 1, rg.w, "Loading team fixtures…")
         return
-    r = top + 3
+    r = 3
     st.sched_sel = max(0, min(st.sched_sel, len(matches) - 1))
     for i, m in enumerate(matches):
-        if r > bottom:
+        if r >= rg.h:
             break
-        draw_compact_row(cv, r, 2, cols - 4, m, i == st.sched_sel, frame, left="date")
-        st.hits.add(r, 2, 1, cols - 4, ("sel", "sched_sel", i, True))
+        row = rg.rows(r, r + 1)
+        draw_compact_row(row, m, i == st.sched_sel, frame, left="date")
+        row.hit(("sel", "sched_sel", i, True), 0, 2, 1, row.w - 4)
         r += 1
 
 
@@ -1289,7 +1292,7 @@ def render(state, cols, rows):
             if v == S.LIVE:
                 view_live(cv, top, bottom, cols, st, frame)
             elif v == S.SCHEDULE:
-                view_schedule(cv, top, bottom, cols, st, frame)
+                view_schedule(body, st, frame)
             elif v == S.GROUPS:
                 view_groups(body, st, frame)
             elif v == S.BRACKET:
@@ -1299,7 +1302,7 @@ def render(state, cols, rows):
             elif v == S.DETAIL:
                 view_detail(cv, top, bottom, cols, st, frame)
             elif v == S.TEAM:
-                view_team(cv, top, bottom, cols, st, frame)
+                view_team(body, st, frame)
             elif v == S.HELP:
                 view_help(body, st, frame)
         if st.command_mode:
