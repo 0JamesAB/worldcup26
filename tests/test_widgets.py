@@ -69,6 +69,23 @@ class TestDrawHbar(unittest.TestCase):
         self.assertEqual(row_text(cv, 0), "░" * 10)
 
 
+    def test_negative_frac_clamped(self):
+        # regression: frac < 0 must not draw the track left of the bar
+        cv = Canvas(20, 1)
+        cv.put(0, 2, "AB")           # sentinel just left of the bar
+        n = widgets.draw_hbar(cv, 0, 5, 10, -0.4, "F", "T")
+        self.assertEqual(n, 0)
+        self.assertEqual(cv.grid[0][2].ch, "A")
+        self.assertEqual(cv.grid[0][3].ch, "B")
+        self.assertEqual(row_text(cv, 0)[5:15], "░" * 10)
+        self.assertEqual(cv.grid[0][15].ch, " ")   # nothing past the bar
+
+    def test_negative_width_noop(self):
+        cv = Canvas(10, 1)
+        self.assertEqual(widgets.draw_hbar(cv, 0, 0, -5, 0.5, "F", "T"), 0)
+        self.assertEqual(row_text(cv, 0), " " * 10)
+
+
 class TestSplitFracs(unittest.TestCase):
     def test_ints(self):
         self.assertEqual(widgets.split_fracs(3, 1), (0.75, 0.25))

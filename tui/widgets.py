@@ -40,11 +40,20 @@ def tab_bar(cv, r, c, width, tabs, active, hint="", theme=None):
         else:
             seg_style = bg(*t.bg1) + fg(*t.dim)
             txt = f" {key} {label} "
-        cv.put(r, x, txt, seg_style)
         tw = term.display_width(txt)
-        extents.append((x, tw))
+        # clip drawing and the recorded extent to the bar's width so
+        # hit-testing never covers columns that were not rendered
+        remaining = c + width - x
+        if remaining <= 0:
+            extents.append((x, 0))
+            continue
+        if tw > remaining:
+            txt = term.strip_ansi(term.truncate(txt, remaining, ellipsis=""))
+        cv.put(r, x, txt, seg_style)
+        extents.append((x, min(term.display_width(txt), remaining)))
         x += tw
-        cv.put(r, x, " ", bg(*t.bg1))
+        if x < c + width:
+            cv.put(r, x, " ", bg(*t.bg1))
         x += 1
     if hint:
         hx = c + width - term.display_width(hint) - 1
@@ -106,9 +115,12 @@ def draw_hbar(cv, r, c, width, frac, fill_style, track_style=None,
     """Horizontal meter: `frac` in [0, 1] of `width` cells.
 
     track_style=None skips drawing the empty portion.
-    Returns the fill cell count (callers can place a value after it).
+    `frac` and `width` are clamped so out-of-range values never draw
+    outside [c, c+width). Returns the fill cell count (callers can place
+    a value after it).
     """
-    fill = min(width, int(round(frac * width)))
+    width = max(0, width)
+    fill = max(0, min(width, int(round(frac * width))))
     cv.put(r, c, chars[0] * fill, fill_style)
     if track_style is not None and width - fill > 0:
         cv.put(r, c + fill, chars[1] * (width - fill), track_style)

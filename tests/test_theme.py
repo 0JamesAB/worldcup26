@@ -75,5 +75,23 @@ class TestTabBarExtents(unittest.TestCase):
         self.assertEqual(row[x1:x1 + w1], " 2 Groups ")
 
 
+class TestTabBarOverflow(unittest.TestCase):
+    def test_extents_clipped_to_bar_width(self):
+        from tui.canvas import Canvas
+        from tui import widgets
+        cv = Canvas(40, 1)
+        # bar is only 14 cols; second tab overflows, third is fully out
+        ext = widgets.tab_bar(cv, 0, 0, 14,
+                              [("1", "Live"), ("2", "Groups"), ("3", "More")], 0)
+        self.assertEqual(len(ext), 3)
+        for x, w in ext:
+            if w > 0:                          # clickable extents stay in-bar
+                self.assertLessEqual(x + w, 14)
+        self.assertEqual(ext[2][1], 0)        # fully clipped tab: unclickable
+        # nothing drawn past the bar region either
+        row = "".join(c.ch for c in cv.grid[0])
+        self.assertEqual(row[14:].strip(), "")
+
+
 if __name__ == "__main__":
     unittest.main()
