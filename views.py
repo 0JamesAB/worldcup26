@@ -29,6 +29,31 @@ def base():
     return bg(*P.bg0) + fg(*P.text)
 
 
+class _Styles:
+    """The top recurring bg+fg combos over palette.P, pre-composed
+    bg-then-fg (byte-identical to the inline idiom) and rebuilt by
+    render() when the terminal color depth changes."""
+
+    __slots__ = ("depth", "panel_faint", "panel_dim", "panel_white_b",
+                 "panel_gold_b")
+
+    def __init__(self):
+        self.depth = None
+        self.refresh()
+
+    def refresh(self):
+        depth = term.get_color_depth()
+        if depth != self.depth:
+            self.depth = depth
+            self.panel_faint = bg(*P.bg1) + fg(*P.faint)
+            self.panel_dim = bg(*P.bg1) + fg(*P.dim)
+            self.panel_white_b = bg(*P.bg1) + fg(*P.white) + BOLD
+            self.panel_gold_b = bg(*P.bg1) + fg(*P.gold) + BOLD
+
+
+STY = _Styles()
+
+
 def team_hex(tid=None, abbr=None):
     return espn.team_color(tid, abbr)
 
@@ -211,25 +236,23 @@ def draw_header(bar, st, frame):
     # brand
     x = bar.gradient("⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
                      c=2, extra=bg(*P.bg1) + BOLD)
-    bar.put(0, x + 1, "2026", bg(*P.bg1) + fg(*P.gold) + BOLD)
+    bar.put(0, x + 1, "2026", STY.panel_gold_b)
     # host
-    bar.put(0, x + 6, "· USA · CAN · MEX", bg(*P.bg1) + fg(*P.faint))
+    bar.put(0, x + 6, "· USA · CAN · MEX", STY.panel_faint)
 
     # live indicator + clock (right)
     live_n = sum(1 for m in st.matches_today if m.is_live)
     now = datetime.now().strftime("%H:%M:%S")
-    right = f" {now} "
+    rx = bar.right(f" {now} ", STY.panel_dim, pad=1)
     if live_n:
         pulse = (frame // 3) % 2 == 0
         dot = "●" if pulse else "◍"
         chip = f"{dot} {live_n} LIVE "
-        rx = bar.w - term.display_width(right) - term.display_width(chip) - 1
-        bar.put(0, rx, chip, bg(*P.red if pulse else (150, 60, 60)) + fg(*P.white) + BOLD)
+        bar.put(0, rx - term.display_width(chip), chip,
+                bg(*P.red if pulse else (150, 60, 60)) + fg(*P.white) + BOLD)
     else:
         chip = "○ no live "
-        rx = bar.w - term.display_width(right) - term.display_width(chip) - 1
-        bar.put(0, rx, chip, bg(*P.bg1) + fg(*P.faint))
-    bar.right(right, bg(*P.bg1) + fg(*P.dim), pad=1)
+        bar.put(0, rx - term.display_width(chip), chip, STY.panel_faint)
 
 
 def draw_tabs(bar, st):
@@ -248,7 +271,7 @@ def draw_statusline(bar, st):
     bar.fill(bg(*P.bg1))
     if st.command_mode:
         prompt = ":" + st.command_buf
-        bar.put(0, 1, prompt, bg(*P.bg1) + fg(*P.white) + BOLD)
+        bar.put(0, 1, prompt, STY.panel_white_b)
         x = 1 + term.display_width(prompt)
         bar.put(0, x, "█", bg(*P.bg1) + fg(*P.accent))
         # inline ghost completion of the highlighted suggestion
@@ -257,15 +280,15 @@ def draw_statusline(bar, st):
             t = sugg[min(st.command_sel, len(sugg) - 1)]["text"]
             if t.startswith(st.command_buf) and len(t) > len(st.command_buf):
                 ghost = t[len(st.command_buf):]
-                bar.put(0, x + 1, term.strip_ansi(ghost), bg(*P.bg1) + fg(*P.faint))
-                bar.put(0, x + 1 + term.display_width(ghost), "  ⇥ tab", bg(*P.bg1) + fg(*P.faint))
+                bar.put(0, x + 1, term.strip_ansi(ghost), STY.panel_faint)
+                bar.put(0, x + 1 + term.display_width(ghost), "  ⇥ tab", STY.panel_faint)
         return
     # latest live toast
     alive = [t for t in st.toasts if t.alive]
     if alive:
         t = alive[-1]
         if t.kind == "goal":
-            stl = bg(*P.bg1) + fg(*P.gold) + BOLD
+            stl = STY.panel_gold_b
         elif t.kind == "error":
             stl = bg(*P.bg1) + fg(*P.red)
         else:
@@ -275,7 +298,7 @@ def draw_statusline(bar, st):
             stl = bg(*P.gold) + fg(*P.bg0) + BOLD
         bar.put(0, 1, " " + t.text + " ", stl)
     else:
-        bar.put(0, 1, st.status, bg(*P.bg1) + fg(*P.faint))
+        bar.put(0, 1, st.status, STY.panel_faint)
     # net status right
     err = espn.last_error[0]
     if err:
@@ -319,7 +342,7 @@ def draw_command_palette(root, st):
         else:
             lblst = bg(*P.bg2) + fg(*P.text)
             hintst = bg(*P.bg2) + fg(*P.dim)
-        root.put(rr, x0 + 4, term.strip_ansi(term.truncate(s["label"], w - 10)), lblst)
+        root.put(rr, x0 + 4, s["label"], lblst, max_w=w - 10)
         hint = s.get("hint", "")
         if hint:
             hx = x0 + w - term.display_width(hint) - 2
@@ -426,8 +449,7 @@ def draw_match_card(card, m, selected, frame):
     if show_odds:
         draw_odds_bars(inner, 2, m, fillstyle)
         prov = f" {m.odds.provider or 'odds'} "
-        card.put(card.h - 1, max(2, (card.w - term.display_width(prov)) // 2),
-                 prov, fg(*P.faint))
+        card.center(prov, fg(*P.faint), row=card.h - 1, pad=2)
 
 
 def compact_status(m, frame):
@@ -473,8 +495,7 @@ def draw_compact_row(row, m, selected, frame, left="time"):
     row.put(0, x + 52, term.pad(term.strip_ansi(cs), 10), fillstyle + cstyle)
     vx = x + 63
     if m.venue and vx < row.w - 6:
-        row.put(0, vx, term.strip_ansi(term.truncate(m.venue, row.w - vx - 3)),
-                fillstyle + fg(*P.faint))
+        row.put(0, vx, m.venue, fillstyle + fg(*P.faint), max_w=row.w - vx - 3)
 
 
 # ----------------------------------------------------------------------------
@@ -531,8 +552,7 @@ def view_schedule(rg, st, frame):
     except ValueError:
         dstr = d
     nav = f"◂  {dstr}  ▸"
-    nx = max(2, (rg.w - term.display_width(nav)) // 2)
-    rg.put(0, nx, nav, fg(*P.text) + BOLD)
+    nx = rg.center(nav, fg(*P.text) + BOLD, pad=2)
     nw = term.display_width(nav)
     rg.hit(("sched_day", -1), 0, nx - 1, 1, 3)
     rg.hit(("sched_day", 1), 0, nx + nw - 2, 1, 3)
@@ -790,7 +810,7 @@ def view_scorers(rg, st, frame):
     x = 2
     for i, (lbl, _) in enumerate(tabs):
         on = i == st.scorers_tab
-        stl = (bg(*P.gold) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
+        stl = (bg(*P.gold) + fg(*P.bg0) + BOLD) if on else STY.panel_dim
         icon = "⚽ " if i == 0 else "🅰 "
         rg.put(0, x, f" {icon}{lbl} ", stl)
         tw = term.display_width(f" {icon}{lbl} ")
@@ -854,7 +874,7 @@ def view_detail(rg, st, frame):
     x = 2
     for i, lbl in enumerate(DETAIL_TABS):
         on = i == st.detail_tab
-        stl = (bg(*P.accent) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
+        stl = (bg(*P.accent) + fg(*P.bg0) + BOLD) if on else STY.panel_dim
         rg.put(4, x, f" {lbl} ", stl)
         rg.hit(("detail_tab", i), 4, x, 1, term.display_width(lbl) + 2)
         x += term.display_width(lbl) + 3
@@ -875,10 +895,10 @@ def view_detail(rg, st, frame):
 def draw_detail_odds_strip(rg, m, od):
     """One-line moneyline strip (shown on every detail tab for pre-match).
     `rg` is the single strip row."""
-    x = rg.put(0, 2, "Odds", bg(*P.bg1) + fg(*P.faint)) + 2
+    x = rg.put(0, 2, "Odds", STY.panel_faint) + 2
     for i, (name, abbr, hexcol, p) in enumerate(_prob_rows(m, od)):
         if i:
-            x = rg.put(0, x, "·", bg(*P.bg1) + fg(*P.faint)) + 1
+            x = rg.put(0, x, "·", STY.panel_faint) + 1
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
         x = rg.put(0, x, abbr, bg(*P.bg1) + col + BOLD) + 1
         x = rg.put(0, x, f"{round(p * 100)}%", bg(*P.bg1) + fg(*P.text)) + 1
@@ -889,7 +909,7 @@ def draw_detail_odds_strip(rg, m, od):
     if right.strip():
         rx = rg.w - term.display_width(right) - 2
         if rx > x + 2:
-            rg.put(0, rx, right, bg(*P.bg1) + fg(*P.faint))
+            rg.put(0, rx, right, STY.panel_faint)
 
 
 def draw_detail_header(rg, m, frame, od=None):
@@ -900,7 +920,7 @@ def draw_detail_header(rg, m, frame, od=None):
         return
     a, h = m.away, m.home
     rnd = espn.ROUND_LABEL.get(m.season_slug, "")
-    rg.put(0, 2, f"{rnd}  ·  {m.venue}", bg(*P.bg1) + fg(*P.dim))
+    rg.put(0, 2, f"{rnd}  ·  {m.venue}", STY.panel_dim)
     stxt, sstyle = status_text(m, frame)
     rg.right(stxt, bg(*P.bg1) + sstyle, pad=2)
     # big score line
@@ -911,11 +931,11 @@ def draw_detail_header(rg, m, frame, od=None):
     cx = max(2, (rg.w - term.display_width(line)) // 2)
     (rg.at(1, cx)
        .write("● ", bg(*P.bg1) + fg_hex(team_hex(a.id if a else None, a.abbr if a else None)))
-       .write(aw, bg(*P.bg1) + fg(*P.white) + BOLD + (BOLD if a and a.winner else ""))
+       .write(aw, STY.panel_white_b + (BOLD if a and a.winner else ""))
        .write("    ", bg(*P.bg1))
-       .write(sc, bg(*P.bg1) + fg(*P.gold) + BOLD)
+       .write(sc, STY.panel_gold_b)
        .gap(4)
-       .write(hw, bg(*P.bg1) + fg(*P.white) + BOLD)
+       .write(hw, STY.panel_white_b)
        .gap(1)
        .write(" ●", bg(*P.bg1) + fg_hex(team_hex(h.id if h else None, h.abbr if h else None))))
     if od is not None and m.is_pre:
@@ -1030,8 +1050,8 @@ def place_formation(rg, y0, height, rows, lineup, m, invert):
             nm = p.short or p.name
             nm = nm.split()[-1] if nm else "?"
             nx = cx - len(nm) // 2
-            rg.put(ry + (1 if not invert else -1), max(0, nx), term.strip_ansi(term.truncate(nm, 12)),
-                   bg(*P.pitch) + fg(*(235, 245, 235)) + BOLD)
+            rg.put(ry + (1 if not invert else -1), max(0, nx), nm,
+                   bg(*P.pitch) + fg(*(235, 245, 235)) + BOLD, max_w=12)
 
 
 def bg_team(lineup):
@@ -1067,15 +1087,15 @@ def draw_timeline(rg, m, detail, st):
         minute = e.minute or ""
         # minute chip sits on the spine (no icon overlap)
         rg.put(r, spine - 3, term.pad(minute, 7, "center"), bg(*P.bg2) + fg(*P.gold) + BOLD)
-        label = term.strip_ansi(label)
+        label = term.strip_ansi(label)   # sanitize feed text; icon is ours
         if is_away:
             text = f"{label} {icon}"
-            tx = spine - 4 - term.display_width(term.strip_ansi(text))
-            rg.put(r, max(2, tx), term.strip_ansi(text),
+            tx = spine - 4 - term.display_width(text)
+            rg.put(r, max(2, tx), text,
                    (fg(*P.white) + BOLD if e.scoring else istyle))
         else:
             text = f"{icon} {label}"
-            rg.put(r, spine + 4, term.strip_ansi(text),
+            rg.put(r, spine + 4, text,
                    (fg(*P.white) + BOLD if e.scoring else istyle))
         r += 1
 
@@ -1103,7 +1123,7 @@ def draw_stats(rg, m, detail):
     acol = fg_hex(team_hex(m.away.id if m and m.away else None, a))
     hcol = fg_hex(team_hex(m.home.id if m and m.home else None, h))
     rg.put(0, 6, a, acol + BOLD)
-    rg.put(0, rg.w - 6 - term.display_width(h), h, hcol + BOLD)
+    rg.right(h, hcol + BOLD, pad=6)
     rg.put(0, (rg.w - 8) // 2, "stat", fg(*P.faint))
     r = 2
     for label, av, hv in rows:
@@ -1129,7 +1149,7 @@ def view_team(rg, st, frame):
     col = team_hex(abbr=abbr)
     rg.fill_rect(0, 0, 2, rg.w, bg(*P.bg1))
     rg.put(0, 2, "███ ", bg(*P.bg1) + fg_hex(col))
-    rg.put(0, 6, name, bg(*P.bg1) + fg(*P.white) + BOLD)
+    rg.put(0, 6, name, STY.panel_white_b)
     rg.put(0, 6 + term.display_width(name) + 2, abbr, bg(*P.bg1) + fg_hex(col) + BOLD)
     matches = getattr(st, "team_matches", [])
     # record summary (played matches only)
@@ -1155,13 +1175,13 @@ def view_team(rg, st, frame):
         elif m.is_pre and nxt is None:
             nxt = m
     rec_txt = f"  P{w + d + l}  ·  {w}W {d}D {l}L  ·  {gf}-{ga}"
-    rg.put(1, 6, rec_txt, bg(*P.bg1) + fg(*P.dim))
+    rg.put(1, 6, rec_txt, STY.panel_dim)
     if nxt:
         opp = nxt.away if (nxt.home and nxt.home.abbr == abbr) else nxt.home
         local = espn.to_local(nxt.date)
         when = local.strftime("%a %d %b · %H:%M") if local else ""
         nt = f"next: vs {opp.abbr if opp else '?'}  {when}"
-        rg.put(1, rg.w - term.display_width(nt) - 2, nt, bg(*P.bg1) + fg(*P.accent2))
+        rg.right(nt, bg(*P.bg1) + fg(*P.accent2), row=1, pad=2)
     rg.hline(2, 2, rg.w - 4, fg(*P.line))
     if not matches:
         center_msg(rg, 3, rg.h - 1, rg.w, "Loading team fixtures…")
@@ -1200,8 +1220,8 @@ def view_help(rg, st, frame):
         ("r", "force refresh   ·   ? help   ·   q quit"),
     ]
     for k, d in keys:
-        inner.put(r, 1, term.pad(k, 18), bg(*P.bg1) + fg(*P.gold) + BOLD)
-        inner.put(r, 19, term.strip_ansi(term.truncate(d, bw - 22)), bg(*P.bg1) + fg(*P.text))
+        inner.put(r, 1, term.pad(k, 18), STY.panel_gold_b)
+        inner.put(r, 19, d, bg(*P.bg1) + fg(*P.text), max_w=bw - 22)
         r += 1
     r += 1
     inner.put(r, 1, "COMMANDS  (type : then…)", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
@@ -1209,7 +1229,7 @@ def view_help(rg, st, frame):
         if r > bh - 3:
             break
         inner.put(r, 1, term.pad(c, 26), bg(*P.bg1) + fg(*P.accent2))
-        inner.put(r, 27, term.strip_ansi(term.truncate(d, bw - 30)), bg(*P.bg1) + fg(*P.dim))
+        inner.put(r, 27, d, STY.panel_dim, max_w=bw - 30)
         r += 1
 
 
@@ -1249,6 +1269,7 @@ def context_label(st):
 
 def render(state, cols, rows):
     st = state
+    STY.refresh()
     cv = Canvas(cols, rows, base())
     with st.lock:
         st.frame += 1
