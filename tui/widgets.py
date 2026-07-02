@@ -202,7 +202,8 @@ def draw_card(cv, r, c, h, w, border_style="", fill_style="", chars=None,
     plus selection chevrons in the border column when `selected`.
 
     `title` is truncated to keep clear of `right` (title_reserve columns).
-    Returns (r + 1, c + 2, w - 4): the inner content origin and width.
+    Returns the inner content Region (one row inside the frame, two
+    columns inside each vertical border).
     """
     cv.box(r, c, h, w, style=border_style, chars=chars or LIGHT,
            fillstyle=fill_style)
@@ -215,7 +216,7 @@ def draw_card(cv, r, c, h, w, border_style="", fill_style="", chars=None,
     if selected:
         cv.put(r + 1, c, select_ch, select_style)
         cv.put(r + 2, c, select_ch, select_style)
-    return r + 1, c + 2, w - 4
+    return cv.region(r + 1, c + 2, h - 2, w - 4)
 
 
 def draw_duel_row(cv, r, c, width, label, lval, rval, lstyle, rstyle,

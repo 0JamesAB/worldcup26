@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-dashboard.py - Self-contained demo of the tui library (v0.2.0 APIs).
+dashboard.py - Self-contained demo of the tui library (v0.3.0 APIs).
 
 A fake "fleet operations" dashboard that composes the new pieces:
 
-    tui.run          frame loop (arrows move the selection, q quits)
-    vsplit / hsplit  flexbox-style layout
-    ListState        clamped cursor + scroll window over the service list
-    draw_table       the service list itself
-    draw_sparkline   per-service latency history
-    draw_progress    resource meters
-    draw_badge       status pills
-    draw_rule        titled separators
-    spinner          animated "polling" indicator
+    tui.run            frame loop (arrows move the selection, q quits)
+    Region             local-coordinate, hard-clipped drawing surfaces
+    split_v / split_h  flexbox-style layout, straight to child Regions
+    at/write/gap       flowing cursor (header badges)
+    right()            right-aligned text (spinner)
+    table/spark/       widget sugar on Region; the sparkline column is
+    progress/rule      a clipped sub-Region, no alignment arithmetic
+    ListState          clamped cursor + scroll window over the services
+    spinner            animated "polling" indicator
 
 Run it interactively from the repo root:
 
@@ -32,11 +32,10 @@ import tui
 from tui import term, widgets
 from tui.canvas import Canvas
 from tui.interact import ListState
-from tui.layout import Rect, Fixed, Flex, hsplit, vsplit
+from tui.layout import Fixed, Flex
 from tui.term import BOLD, Key, bg, fg
 from tui.theme import Theme
-from tui.widgets import (draw_badge, draw_progress, draw_rule,
-                         draw_sparkline, draw_table, spinner)
+from tui.widgets import spinner
 
 MIN_COLS, MIN_ROWS = 60, 15
 
@@ -93,25 +92,21 @@ def draw_frame(cols, rows, frame, state):
                      f"need at least {MIN_COLS}x{MIN_ROWS}.", base)
         return cv
 
-    root = Rect(0, 0, rows, cols)
-    header, body, footer = vsplit(root, Fixed(2), Flex(1), Fixed(1))
+    header, body, footer = cv.region().split_v(Fixed(2), Flex(1), Fixed(1))
 
     # -- header ------------------------------------------------------------
-    cv.put(header.r, header.c + 1, "FLEET OPS", fg(*t.text) + BOLD)
-    x = header.c + 12
-    x = draw_badge(cv, header.r, x, "prod", bg(*t.accent2) + fg(*t.bg0) + BOLD)
-    x = draw_badge(cv, header.r, x + 1, "3 regions", bg(*t.bg2) + fg(*t.dim))
-    poll = spinner(frame) + " polling"
-    cv.put(header.r, header.right - term.display_width(poll) - 1, poll,
-           fg(*t.accent))
-    draw_rule(cv, header.r + 1, header.c, header.w, style=fg(*t.line))
+    (header.at(0, 1).write("FLEET OPS", fg(*t.text) + BOLD).gap(2)
+           .write(" prod ", bg(*t.accent2) + fg(*t.bg0) + BOLD).gap(1)
+           .write(" 3 regions ", bg(*t.bg2) + fg(*t.dim)))
+    header.right(spinner(frame) + " polling", fg(*t.accent), pad=1)
+    header.rule(r=1, style=fg(*t.line))
 
     # -- body: services table | side column --------------------------------
-    left, right = hsplit(body.inset(0, 1), Flex(3, min=40), Flex(2, min=24),
-                         gap=2)
+    left, side = body.inset(0, 1).split_h(Flex(3, min=40), Flex(2, min=24),
+                                          gap=2)
 
-    draw_rule(cv, left.r, left.c, left.w, title="services",
-              style=fg(*t.line), title_style=fg(*t.dim) + BOLD)
+    left.rule(title="services", style=fg(*t.line),
+              title_style=fg(*t.dim) + BOLD)
     visible = max(1, left.h - 2)
     start, stop = state.window(visible)
     spark_w = 12
@@ -132,47 +127,42 @@ def draw_frame(cols, rows, frame, state):
             (f"{p50}ms" if p50 else "--", row_bg + fg(*t.dim)),
             None,  # sparkline drawn separately below
         ])
-    draw_table(cv, left.r + 1, left.c, left.w, cols_spec, table_rows,
-               header_style=fg(*t.faint) + BOLD)
-    # Right-align the sparkline inside the flex column: when the panel is
-    # narrow the flex column is thinner than spark_w, so clip the history
-    # rather than overwrite the fixed P50 column to its left.
+    left.table(cols_spec, table_rows, r=1, header_style=fg(*t.faint) + BOLD)
+    # The sparkline column is its own clipped sub-Region past the fixed
+    # columns: drawing right-aligned inside it can never overwrite the P50
+    # column, and a too-narrow panel just clips the history's left edge.
     fixed_w = sum(cw for _, cw, _ in cols_spec if cw >= 0)
-    spark_n = max(0, min(spark_w, left.w - fixed_w))
+    sparks = left.region(2, fixed_w)
     for row_i, i in enumerate(range(start, stop)):
-        if spark_n == 0:
-            break
-        hist = SERVICES[i][4][-spark_n:]
+        hist = SERVICES[i][4]
         sel_bg = bg(*t.bg2) if i == state.sel else ""
         color = t.error if SERVICES[i][2] == "DOWN" else t.accent2
-        draw_sparkline(cv, left.r + 2 + row_i, left.right - spark_n,
-                       hist, sel_bg + fg(*color), lo=0)
+        sparks.spark(hist, r=row_i, c=sparks.w - len(hist),
+                     style=sel_bg + fg(*color), lo=0)
 
-    # -- right column: meters + deploys ------------------------------------
-    meters, deploys = vsplit(right, Fixed(2 + len(METERS)), Flex(1), gap=1)
-    draw_rule(cv, meters.r, meters.c, meters.w, title="node capacity",
-              style=fg(*t.line), title_style=fg(*t.dim) + BOLD)
+    # -- side column: meters + deploys --------------------------------------
+    meters, deploys = side.split_v(Fixed(2 + len(METERS)), Flex(1), gap=1)
+    meters.rule(title="node capacity", style=fg(*t.line),
+                title_style=fg(*t.dim) + BOLD)
     label_w = 9
     for i, (label, frac) in enumerate(METERS):
-        rr = meters.r + 1 + i
-        cv.put(rr, meters.c, label, fg(*t.dim))
+        meters.put(1 + i, 0, label, fg(*t.dim))
         color = t.error if frac > 0.8 else t.warn if frac > 0.6 else t.accent
-        draw_progress(cv, rr, meters.c + label_w, meters.w - label_w, frac,
-                      fg(*color), track_style=fg(*t.bg2), show_pct=True,
-                      pct_style=fg(*t.text))
+        meters.progress(frac, fg(*color), r=1 + i, c=label_w,
+                        track_style=fg(*t.bg2), show_pct=True,
+                        pct_style=fg(*t.text))
 
-    draw_rule(cv, deploys.r, deploys.c, deploys.w, title="deploys",
-              style=fg(*t.line), title_style=fg(*t.dim) + BOLD)
+    deploys.rule(title="deploys", style=fg(*t.line),
+                 title_style=fg(*t.dim) + BOLD)
     dep_spec = [("TAG", 9, "left"), ("TARGET", -1, "left"), ("", 8, "right")]
     dep_rows = [[(tag, fg(*t.text)), (target, fg(*t.dim)),
                  (phase, fg(*t.accent) if phase == "done" else fg(*t.warn))]
                 for tag, target, phase in DEPLOY]
-    draw_table(cv, deploys.r + 1, deploys.c, deploys.w, dep_spec, dep_rows,
-               header_style=fg(*t.faint) + BOLD)
+    deploys.table(dep_spec, dep_rows, r=1, header_style=fg(*t.faint) + BOLD)
 
     # -- footer -------------------------------------------------------------
     sel_name = SERVICES[state.sel][0]
-    widgets.footer(cv, footer.r, footer.c, footer.w,
+    widgets.footer(footer, 0, 0, footer.w,
                    [("↑↓", "select"), ("q", "quit")],
                    right=f"{sel_name}  ·  tui {tui.__version__}", theme=t)
     return cv

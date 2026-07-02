@@ -285,8 +285,7 @@ class Region:
             h = self.h - r
         if w is None:
             w = self.w - c
-        ir, ic, iw = widgets.draw_card(self, r, c, h, w, **_sty_kwargs(kw))
-        return Region(self, ir, ic, max(0, h - 2), max(0, iw))
+        return widgets.draw_card(self, r, c, h, w, **_sty_kwargs(kw))
 
     def table(self, cols_spec, rows, r=0, c=0, w=None, **kw):
         """draw_table at local (r, c). Returns rows consumed."""

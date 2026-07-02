@@ -144,9 +144,10 @@ class TestDrawTable(unittest.TestCase):
 class TestDrawCard(unittest.TestCase):
     def test_frame_title_right_and_inner(self):
         from tui.canvas import LIGHT
+        from tui.layout import Rect
         cv = Canvas(30, 4)
         inner = widgets.draw_card(cv, 0, 0, 4, 30, title=" T ", right="FT")
-        self.assertEqual(inner, (1, 2, 26))
+        self.assertEqual(inner.rect, Rect(1, 2, 2, 26))
         self.assertEqual(cv.grid[0][0].ch, LIGHT["tl"])
         self.assertEqual(cv.grid[0][29].ch, LIGHT["tr"])
         self.assertEqual(cv.grid[0][3].ch, "T")
