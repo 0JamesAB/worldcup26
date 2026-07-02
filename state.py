@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import espn
+from tui.interact import HitMap
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
@@ -49,6 +50,7 @@ class Toast:
 class AppState:
     def __init__(self):
         self.lock = threading.RLock()
+        self.hits = HitMap()   # clickable regions, rebuilt every rendered frame
         self.view = LIVE
         self.prev_view = LIVE
         self.running = True

@@ -18,7 +18,7 @@ from .term import (fg, bg, fg_hex, bg_hex, hex_rgb, style,
 from .canvas import Canvas, Cell, LIGHT, HEAVY, DOUBLE
 from .theme import Theme, get_theme, set_theme
 from .layout import Rect, Fixed, Flex, hsplit, vsplit
-from .interact import ListState, ScrollState
+from .interact import ListState, ScrollState, HitMap
 from .styles import Style
 from .app import run
 # `tui.style` stays the v0.1.0 term.style() helper function; the Style

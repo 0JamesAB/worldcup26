@@ -105,3 +105,35 @@ class ScrollState:
     @property
     def at_bottom(self):
         return self.offset >= self.max_offset
+
+
+class HitMap:
+    """Frame-scoped registry of clickable screen regions.
+
+    Views call add() for each interactive region while rendering a frame;
+    the input loop calls lookup() with a MouseEvent's row/col to find the
+    action under the pointer. Regions added later win overlaps (draw
+    order = z-order). Rebuild (clear + add) every frame so regions always
+    match what is on screen.
+    """
+
+    def __init__(self):
+        self._regions = []
+
+    def clear(self):
+        self._regions = []
+
+    def add(self, r, c, h, w, action):
+        """Register rows [r, r+h) x cols [c, c+w) as `action` (any value)."""
+        if h > 0 and w > 0:
+            self._regions.append((r, c, h, w, action))
+
+    def lookup(self, row, col):
+        """The action under (row, col), or None. Last-added wins."""
+        for r, c, h, w, action in reversed(self._regions):
+            if r <= row < r + h and c <= col < c + w:
+                return action
+        return None
+
+    def __len__(self):
+        return len(self._regions)

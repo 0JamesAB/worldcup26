@@ -48,18 +48,23 @@ def current_list(st):
     return [], None
 
 
+def open_match(st, refresher, event_id):
+    """Jump to the match centre for an event id."""
+    st.detail_event_id = event_id
+    if st.view != S.DETAIL:
+        st.prev_view = st.view
+    st.view = S.DETAIL
+    st.detail_tab = 0
+    st.detail_scroll = 0
+    refresher.request_summary(event_id)
+
+
 def open_selected(st, refresher):
     lst, attr = current_list(st)
     if not lst or attr is None or st.view == S.SCORERS:
         return
     idx = max(0, min(getattr(st, attr), len(lst) - 1))
-    m = lst[idx]
-    st.detail_event_id = m.id
-    st.prev_view = st.view
-    st.view = S.DETAIL
-    st.detail_tab = 0
-    st.detail_scroll = 0
-    refresher.request_summary(m.id)
+    open_match(st, refresher, lst[idx].id)
 
 
 def move_selection(st, delta):
@@ -127,6 +132,46 @@ def handle_normal_key(st, key, refresher):
         nav_vertical(st, -9999)
     elif key == Key.END:
         nav_vertical(st, 9999)
+
+
+def handle_mouse(st, ev, refresher):
+    """Route a MouseEvent: wheel scrolls, left-click hits a region.
+
+    Click semantics: clicking a list item / card selects it; clicking the
+    already-selected one opens it (match centre). Tabs, date arrows and
+    bracket cells act immediately.
+    """
+    if ev.kind == "wheel":
+        nav_vertical(st, 1 if ev.button == "wheel_down" else -1)
+        return
+    if ev.kind != "press" or ev.button != "left":
+        return
+    action = st.hits.lookup(ev.row, ev.col)
+    if not action:
+        return
+    kind = action[0]
+    if kind == "view":
+        change_view(st, action[1])
+    elif kind == "sel":
+        _, attr, i, openable = action
+        if openable and getattr(st, attr, None) == i:
+            open_selected(st, refresher)
+        else:
+            setattr(st, attr, i)
+    elif kind == "open":
+        open_match(st, refresher, action[1])
+    elif kind == "scorers_tab":
+        st.scorers_tab = action[1]
+        st.scorers_sel = 0
+    elif kind == "detail_tab":
+        st.detail_tab = action[1]
+        st.detail_scroll = 0
+    elif kind == "sched_day":
+        d = S.resolve_date(("+" if action[1] > 0 else "-") + "1", st.schedule_date)
+        if d:
+            st.schedule_date = d
+            st.sched_sel = 0
+            refresher.request_schedule(d)
 
 
 def nav_vertical(st, delta):
@@ -361,14 +406,17 @@ def main():
     renderer = Renderer()
     last_tick = 0.0
     try:
-        with RawTerminal() as tw:
+        with RawTerminal(mouse=True) as tw:
             while st.running:
                 if tw.take_resize():
                     renderer.reset()
                     st.dirty = True
                 key = read_key(timeout=0.12)
                 if key is not None:
-                    if st.command_mode:
+                    if isinstance(key, term.MouseEvent):
+                        if not st.command_mode:
+                            handle_mouse(st, key, refresher)
+                    elif st.command_mode:
                         handle_command_key(st, key, refresher)
                     else:
                         handle_normal_key(st, key, refresher)

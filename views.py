@@ -233,7 +233,10 @@ def draw_header(cv, cols, st, frame):
 
 def draw_tabs(cv, cols, st):
     active = S.TAB_VIEWS.index(st.view) if st.view in S.TAB_VIEWS else -1
-    widgets.tab_bar(cv, 1, 0, cols, S.TABS, active, hint="  :help  ·  q quit")
+    extents = widgets.tab_bar(cv, 1, 0, cols, S.TABS, active,
+                              hint="  :help  ·  q quit")
+    for i, (x, w) in enumerate(extents):
+        st.hits.add(1, x, 1, w, ("view", S.TAB_VIEWS[i]))
 
 
 def draw_context(cv, cols, st, label):
@@ -516,6 +519,7 @@ def view_live(cv, top, bottom, cols, st, frame):
         if shown > 0 and r + cons - 2 > bottom:
             break
         draw_match_card(cv, r, col_x, card_w, matches[i], i == st.live_sel, frame)
+        st.hits.add(r, col_x, cons - 1, card_w, ("sel", "live_sel", i, True))
         r += cons
         shown += 1
     if shown < len(matches):
@@ -533,7 +537,11 @@ def view_schedule(cv, top, bottom, cols, st, frame):
     except ValueError:
         dstr = d
     nav = f"◂  {dstr}  ▸"
-    cv.put(top, max(2, (cols - term.display_width(nav)) // 2), nav, fg(*P.text) + BOLD)
+    nx = max(2, (cols - term.display_width(nav)) // 2)
+    cv.put(top, nx, nav, fg(*P.text) + BOLD)
+    nw = term.display_width(nav)
+    st.hits.add(top, nx - 1, 1, 3, ("sched_day", -1))
+    st.hits.add(top, nx + nw - 2, 1, 3, ("sched_day", 1))
     if st.schedule_label:
         cv.put(top, 2, st.schedule_label, fg(*P.gold))
     if "schedule" in st.loading:
@@ -553,6 +561,7 @@ def view_schedule(cv, top, bottom, cols, st, frame):
         if r > bottom:
             break
         draw_compact_row(cv, r, 2, cols - 4, matches[i], i == st.sched_sel, frame)
+        st.hits.add(r, 2, 1, cols - 4, ("sel", "sched_sel", i, True))
         r += 1
 
 
@@ -625,12 +634,23 @@ def view_bracket(cv, top, bottom, cols, st, frame):
     if not br or not any(br.values()):
         center_msg(cv, top, bottom, cols, "Loading knockout bracket…")
         return
-    big = build_bracket_canvas(br, frame)
+    big, cells = build_bracket_canvas(br, frame)
     vh = bottom - top + 1
     vw = cols - 2
     st.bracket_scroll_y = max(0, min(st.bracket_scroll_y, max(0, big.h - vh)))
     st.bracket_scroll_x = max(0, min(st.bracket_scroll_x, max(0, big.w - vw)))
     oy, ox = st.bracket_scroll_y, st.bracket_scroll_x
+    # register the visible slice of each match box as clickable
+    for cy, cx, m in cells:
+        if not m:
+            continue
+        r0 = top + (cy - 1) - oy          # box top row on screen
+        c0 = 2 + cx - ox
+        rr = max(r0, top)
+        rc = max(c0, 2)
+        rh = min(r0 + 4, bottom + 1) - rr
+        rw = min(c0 + CELL_W, 2 + vw) - rc
+        st.hits.add(rr, rc, rh, rw, ("open", m.id))
     for y in range(vh):
         sy = y + oy
         if sy >= big.h:
@@ -717,13 +737,17 @@ def _bracket_model(br):
 
 
 def build_bracket_canvas(br, frame):
+    """Returns (canvas, cells) where cells is [(cy, cx, match)] for hit-testing."""
     numbered, feeders = _bracket_model(br)
     sizes = [len(numbered.get(slug, [])) for slug in KO_ORDER]
     ridx = {slug: i for i, slug in enumerate(KO_ORDER)}
     idx_feeders = {(ridx[slug], i): v for (slug, i), v in feeders.items()}
+    cells = []
 
     def cell(cv, cy, cx, ri, i):
-        draw_bracket_cell(cv, cy, cx, numbered[KO_ORDER[ri]][i], frame)
+        m = numbered[KO_ORDER[ri]][i]
+        cells.append((cy, cx, m))
+        draw_bracket_cell(cv, cy, cx, m, frame)
 
     cv, colx, ypos = widgets.draw_bracket(
         sizes, idx_feeders, cell,
@@ -740,7 +764,8 @@ def build_bracket_canvas(br, frame):
         if ty + 3 < cv.h:
             cv.put(ty - 2, colx[fin] + 3, "3rd Place", fg(*P.dim) + BOLD)
             draw_bracket_cell(cv, ty, colx[fin], third[0], frame)
-    return cv
+            cells.append((ty, colx[fin], third[0]))
+    return cv, cells
 
 
 def draw_bracket_cell(cv, cy, cx, m, frame):
@@ -789,7 +814,9 @@ def view_scorers(cv, top, bottom, cols, st, frame):
         stl = (bg(*P.gold) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
         icon = "⚽ " if i == 0 else "🅰 "
         cv.put(top, x, f" {icon}{lbl} ", stl)
-        x += term.display_width(f" {icon}{lbl} ") + 1
+        tw = term.display_width(f" {icon}{lbl} ")
+        st.hits.add(top, x, 1, tw, ("scorers_tab", i))
+        x += tw + 1
     cv.put(top, cols - 18, "←→ switch board", fg(*P.faint))
     cv.hline(top + 1, 2, cols - 4, fg(*P.line))
 
@@ -819,6 +846,7 @@ def view_scorers(cv, top, bottom, cols, st, frame):
         filln = widgets.draw_hbar(cv, r, bx, barmax, row["value"] / maxval,
                                   bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
         cv.put(r, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
+        st.hits.add(r, 2, 1, cols - 4, ("sel", "scorers_sel", i, False))
         r += 1
 
 
@@ -847,6 +875,7 @@ def view_detail(cv, top, bottom, cols, st, frame):
         on = i == st.detail_tab
         stl = (bg(*P.accent) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
         cv.put(htop, x, f" {lbl} ", stl)
+        st.hits.add(htop, x, 1, term.display_width(lbl) + 2, ("detail_tab", i))
         x += term.display_width(lbl) + 3
     cv.put(htop, cols - 16, "←→ tabs · esc back", fg(*P.faint))
     cv.hline(htop + 1, 2, cols - 4, fg(*P.line))
@@ -1168,6 +1197,7 @@ def view_team(cv, top, bottom, cols, st, frame):
         if r > bottom:
             break
         draw_compact_row(cv, r, 2, cols - 4, m, i == st.sched_sel, frame, left="date")
+        st.hits.add(r, 2, 1, cols - 4, ("sel", "sched_sel", i, True))
         r += 1
 
 
@@ -1247,6 +1277,7 @@ def render(state, cols, rows):
     with st.lock:
         st.frame += 1
         frame = st.frame
+        st.hits.clear()   # clickable regions track exactly this frame
         draw_header(cv, cols, st, frame)
         draw_tabs(cv, cols, st)
         draw_context(cv, cols, st, context_label(st))

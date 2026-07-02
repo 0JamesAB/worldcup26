@@ -59,5 +59,21 @@ class TestThemedWidgets(ThemeCase):
         self.assertIn("v1", row)
 
 
+class TestTabBarExtents(unittest.TestCase):
+    def test_extents_match_labels(self):
+        from tui.canvas import Canvas
+        from tui import widgets, term
+        cv = Canvas(60, 1)
+        ext = widgets.tab_bar(cv, 0, 0, 60, [("1", "Live"), ("2", "Groups")], 0)
+        self.assertEqual(len(ext), 2)
+        (x0, w0), (x1, w1) = ext
+        self.assertEqual(x0, 0)
+        self.assertEqual(w0, term.display_width(" 1 Live "))
+        self.assertEqual(x1, w0 + 1)   # one-cell gap between tabs
+        # extents line up with the rendered text
+        row = "".join(c.ch for c in cv.grid[0])
+        self.assertEqual(row[x1:x1 + w1], " 2 Groups ")
+
+
 if __name__ == "__main__":
     unittest.main()

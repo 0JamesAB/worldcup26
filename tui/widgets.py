@@ -23,9 +23,14 @@ def panel_style(theme=None):
 
 
 def tab_bar(cv, r, c, width, tabs, active, hint="", theme=None):
-    """Render a row of tab labels. `tabs` is list of (key, label)."""
+    """Render a row of tab labels. `tabs` is list of (key, label).
+
+    Returns a list of (x, width) segment extents, one per tab, so callers
+    can hit-test mouse clicks against the rendered labels.
+    """
     t = theme or get_theme()
     x = c
+    extents = []
     cv.fill_rect(r, c, 1, width, bg(*t.bg1))
     for i, (key, label) in enumerate(tabs):
         is_active = (i == active)
@@ -36,13 +41,16 @@ def tab_bar(cv, r, c, width, tabs, active, hint="", theme=None):
             seg_style = bg(*t.bg1) + fg(*t.dim)
             txt = f" {key} {label} "
         cv.put(r, x, txt, seg_style)
-        x += term.display_width(txt)
+        tw = term.display_width(txt)
+        extents.append((x, tw))
+        x += tw
         cv.put(r, x, " ", bg(*t.bg1))
         x += 1
     if hint:
         hx = c + width - term.display_width(hint) - 1
         if hx > x:
             cv.put(r, hx, hint, bg(*t.bg1) + fg(*t.faint))
+    return extents
 
 
 def footer(cv, r, c, width, hints, right="", theme=None):

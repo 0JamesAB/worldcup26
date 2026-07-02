@@ -220,3 +220,37 @@ class TestScrollState(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHitMap(unittest.TestCase):
+    def setUp(self):
+        from tui.interact import HitMap
+        self.hm = HitMap()
+
+    def test_empty_lookup(self):
+        self.assertIsNone(self.hm.lookup(0, 0))
+
+    def test_basic_region(self):
+        self.hm.add(2, 10, 3, 20, ("view", "live"))
+        self.assertEqual(self.hm.lookup(2, 10), ("view", "live"))
+        self.assertEqual(self.hm.lookup(4, 29), ("view", "live"))
+        self.assertIsNone(self.hm.lookup(5, 10))   # row past extent
+        self.assertIsNone(self.hm.lookup(2, 30))   # col past extent
+        self.assertIsNone(self.hm.lookup(1, 10))
+
+    def test_last_added_wins_overlap(self):
+        self.hm.add(0, 0, 10, 10, "under")
+        self.hm.add(2, 2, 2, 2, "over")
+        self.assertEqual(self.hm.lookup(3, 3), "over")
+        self.assertEqual(self.hm.lookup(0, 0), "under")
+
+    def test_zero_size_ignored(self):
+        self.hm.add(0, 0, 0, 5, "a")
+        self.hm.add(0, 0, 5, 0, "b")
+        self.assertEqual(len(self.hm), 0)
+
+    def test_clear(self):
+        self.hm.add(0, 0, 1, 1, "a")
+        self.hm.clear()
+        self.assertIsNone(self.hm.lookup(0, 0))
+        self.assertEqual(len(self.hm), 0)
