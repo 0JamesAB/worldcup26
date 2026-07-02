@@ -1,13 +1,13 @@
 """
-ui.py - Rendering primitives and widgets built on term.py.
+canvas.py - Rendering primitives built on term.py.
 
-The core is `Canvas`: a grid of styled cells that lets views position text
-absolutely (needed for the bracket and the lineup pitch) and then export
-ANSI lines with adjacent same-style cells coalesced into runs.
+The core is `Canvas`: a grid of styled cells that lets callers position text
+absolutely and then export ANSI lines with adjacent same-style cells
+coalesced into runs.
 """
 
-import term
-from term import RESET, BOLD, DIM, fg, bg, Palette as P
+from . import term
+from .term import RESET
 
 # Box-drawing sets
 LIGHT = dict(tl="╭", tr="╮", bl="╰", br="╯", h="─", v="│",
@@ -151,58 +151,3 @@ class Canvas:
                 dst.ch = src.ch
                 dst.style = src.style
                 dst.cont = src.cont
-
-
-# ----------------------------------------------------------------------------
-# Higher-level helpers used by views
-# ----------------------------------------------------------------------------
-
-def base_style():
-    return bg(*P.bg0) + fg(*P.text)
-
-
-def panel_style():
-    return bg(*P.bg1) + fg(*P.text)
-
-
-def tab_bar(cv, r, c, width, tabs, active, hint=""):
-    """Render a row of tab labels. `tabs` is list of (key, label)."""
-    x = c
-    cv.fill_rect(r, c, 1, width, bg(*P.bg1))
-    for i, (key, label) in enumerate(tabs):
-        is_active = (i == active)
-        if is_active:
-            seg_style = bg(*P.accent) + fg(*P.bg0) + BOLD
-            txt = f" {key} {label} "
-        else:
-            seg_style = bg(*P.bg1) + fg(*P.dim)
-            txt = f" {key} {label} "
-        cv.put(r, x, txt, seg_style)
-        x += term.display_width(txt)
-        cv.put(r, x, " ", bg(*P.bg1))
-        x += 1
-    if hint:
-        hx = c + width - term.display_width(hint) - 1
-        if hx > x:
-            cv.put(r, hx, hint, bg(*P.bg1) + fg(*P.faint))
-
-
-def footer(cv, r, c, width, hints, right=""):
-    """Bottom key-hint bar. `hints` is list of (key, desc)."""
-    cv.fill_rect(r, c, 1, width, bg(*P.bg1))
-    x = c + 1
-    for key, desc in hints:
-        kt = f" {key} "
-        cv.put(r, x, kt, bg(*P.bg2) + fg(*P.gold) + BOLD)
-        x += term.display_width(kt)
-        dt = f" {desc}  "
-        cv.put(r, x, dt, bg(*P.bg1) + fg(*P.dim))
-        x += term.display_width(dt)
-    if right:
-        rx = c + width - term.display_width(right) - 1
-        if rx > x:
-            cv.put(r, rx, right, bg(*P.bg1) + fg(*P.faint))
-
-
-def center(text, width):
-    return term.pad(text, width, align="center")

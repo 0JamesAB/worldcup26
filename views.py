@@ -3,7 +3,7 @@ views.py - All screen rendering for the World Cup TUI.
 
 render(state, cols, rows) -> list[str] (a full frame). Builds the chrome
 (header / tabs / status / footer) and dispatches to the active view, which
-draws onto a ui.Canvas.
+draws onto a tui Canvas.
 """
 
 import os
@@ -13,13 +13,12 @@ from datetime import datetime, timezone
 
 _FAR = datetime.max.replace(tzinfo=timezone.utc)
 
-import term
-import ui
+from tui import term, widgets
+from tui.canvas import Canvas, LIGHT, HEAVY
+from tui.term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
 import espn
 import state as S
-from term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
-from term import Palette as P
-from ui import LIGHT, HEAVY
+from palette import P
 
 
 # ----------------------------------------------------------------------------
@@ -30,26 +29,8 @@ def base():
     return bg(*P.bg0) + fg(*P.text)
 
 
-def lerp(a, b, t):
-    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-
-def gradient_put(cv, r, c, text, c0, c1, extra=""):
-    n = max(1, len(text) - 1)
-    x = c
-    for i, ch in enumerate(text):
-        col = lerp(c0, c1, i / n)
-        cv.put(r, x, ch, fg(*col) + extra)
-        x += term.char_width(ch)
-    return x
-
-
 def team_hex(tid=None, abbr=None):
     return espn.team_color(tid, abbr)
-
-
-def swatch(cv, r, c, tid=None, abbr=None, ch="●"):
-    cv.put(r, c, ch, bg(*P.bg1) if False else fg_hex(team_hex(tid, abbr)))
 
 
 def real_team(abbr):
@@ -172,10 +153,8 @@ def draw_odds_bars(cv, r, c, width, m, fillstyle, labelw=9):
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
         lbl_style = fillstyle + (fg(*P.white) + BOLD if i == favi else fg(*P.dim))
         cv.put(rr, c + 3, term.pad(_fit_label(name, abbr, labelw), labelw), lbl_style)
-        fill = min(barmax, int(round(p * barmax)))
-        cv.put(rr, bx, "█" * fill, fillstyle + col)
-        if barmax - fill > 0:
-            cv.put(rr, bx + fill, "░" * (barmax - fill), fillstyle + fg(*P.line))
+        widgets.draw_hbar(cv, rr, bx, barmax, p, fillstyle + col,
+                          fillstyle + fg(*P.line))
         cv.put(rr, bx + barmax + 1, f"{round(p * 100):>2}%",
                fillstyle + (fg(*P.text) + BOLD if i == favi else fg(*P.dim)))
     return 3
@@ -199,10 +178,7 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
         cv.put(r, cx, term.pad(_fit_label(name, abbr, labelw), labelw),
                fg(*P.text) + (BOLD if i == favi else ""))
-        fill = min(barmax, int(round(p * barmax)))
-        cv.put(r, bx, "█" * fill, col)
-        if barmax - fill > 0:
-            cv.put(r, bx + fill, "░" * (barmax - fill), fg(*P.line))
+        widgets.draw_hbar(cv, r, bx, barmax, p, col, fg(*P.line))
         cv.put(r, bx + barmax + 2, f"{round(p * 100):>2}%",
                fg(*P.text) + (BOLD if i == favi else ""))
         price = fmt_price(prices[i])
@@ -232,7 +208,7 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
 def draw_header(cv, cols, st, frame):
     cv.fill_rect(0, 0, 1, cols, bg(*P.bg1))
     # brand
-    x = gradient_put(cv, 0, 2, "⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
+    x = widgets.gradient_put(cv, 0, 2, "⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
                      extra=bg(*P.bg1) + BOLD)
     cv.put(0, x + 1, "2026", bg(*P.bg1) + fg(*P.gold) + BOLD)
     # host
@@ -257,7 +233,10 @@ def draw_header(cv, cols, st, frame):
 
 def draw_tabs(cv, cols, st):
     active = S.TAB_VIEWS.index(st.view) if st.view in S.TAB_VIEWS else -1
-    ui.tab_bar(cv, 1, 0, cols, S.TABS, active, hint="  :help  ·  q quit")
+    extents = widgets.tab_bar(cv, 1, 0, cols, S.TABS, active,
+                              hint="  :help  ·  q quit")
+    for i, (x, w) in enumerate(extents):
+        st.hits.add(1, x, 1, w, ("view", S.TAB_VIEWS[i]))
 
 
 def draw_context(cv, cols, st, label):
@@ -374,7 +353,7 @@ def draw_footer(cv, cols, rows, st):
     r = rows - 1
     if st.command_mode:
         hints = [("⇥", "complete"), ("↑↓", "select"), ("↵", "run"), ("esc", "cancel")]
-        ui.footer(cv, r, 0, cols, hints, right="")
+        widgets.footer(cv, r, 0, cols, hints, right="")
         return
     common = [("↑↓", "move"), ("↵", "open"), ("⇥", "view"), (":", "command"), ("r", "refresh")]
     if st.view == S.SCHEDULE:
@@ -389,7 +368,7 @@ def draw_footer(cv, cols, rows, st):
         hints = [("esc", "back"), ("⇥", "view"), (":", "command"), ("q", "quit")]
     else:
         hints = common
-    ui.footer(cv, r, 0, cols, hints, right=footer_right(st))
+    widgets.footer(cv, r, 0, cols, hints, right=footer_right(st))
 
 
 # ----------------------------------------------------------------------------
@@ -415,8 +394,6 @@ def draw_match_card(cv, r, c, width, m, selected, frame):
     if selected:
         border = fg(*P.gold) + BOLD
     fillstyle = bg(*(P.bg2 if selected else P.bg1))
-    cv.box(r, c, h, width, style=border, chars=LIGHT, fillstyle=fillstyle)
-
     # title: round · venue (left), status (right)
     rnd = espn.ROUND_LABEL.get(m.season_slug, m.season_slug.replace("-", " ").title())
     venue = m.venue or ""
@@ -424,13 +401,12 @@ def draw_match_card(cv, r, c, width, m, selected, frame):
     if venue:
         title += f" · {venue}"
     title += " "
-    cv.put(r, c + 2, term.strip_ansi(term.truncate(title, width - 18)),
-           fillstyle + fg(*P.dim))
     stxt, sstyle = status_text(m, frame)
-    cv.put(r, c + width - term.display_width(stxt) - 2, stxt, fillstyle + sstyle)
-    if selected:
-        cv.put(r + 1, c, "▸", fg(*P.gold) + BOLD)
-        cv.put(r + 2, c, "▸", fg(*P.gold) + BOLD)
+    widgets.draw_card(cv, r, c, h, width, border_style=border,
+                      fill_style=fillstyle, chars=LIGHT,
+                      title=title, title_style=fillstyle + fg(*P.dim),
+                      right=stxt, right_style=fillstyle + sstyle,
+                      selected=selected, select_style=fg(*P.gold) + BOLD)
 
     # two team rows: away then home
     for i, comp in enumerate((m.away, m.home)):
@@ -543,6 +519,7 @@ def view_live(cv, top, bottom, cols, st, frame):
         if shown > 0 and r + cons - 2 > bottom:
             break
         draw_match_card(cv, r, col_x, card_w, matches[i], i == st.live_sel, frame)
+        st.hits.add(r, col_x, cons - 1, card_w, ("sel", "live_sel", i, True))
         r += cons
         shown += 1
     if shown < len(matches):
@@ -560,7 +537,11 @@ def view_schedule(cv, top, bottom, cols, st, frame):
     except ValueError:
         dstr = d
     nav = f"◂  {dstr}  ▸"
-    cv.put(top, max(2, (cols - term.display_width(nav)) // 2), nav, fg(*P.text) + BOLD)
+    nx = max(2, (cols - term.display_width(nav)) // 2)
+    cv.put(top, nx, nav, fg(*P.text) + BOLD)
+    nw = term.display_width(nav)
+    st.hits.add(top, nx - 1, 1, 3, ("sched_day", -1))
+    st.hits.add(top, nx + nw - 2, 1, 3, ("sched_day", 1))
     if st.schedule_label:
         cv.put(top, 2, st.schedule_label, fg(*P.gold))
     if "schedule" in st.loading:
@@ -580,6 +561,7 @@ def view_schedule(cv, top, bottom, cols, st, frame):
         if r > bottom:
             break
         draw_compact_row(cv, r, 2, cols - 4, matches[i], i == st.sched_sel, frame)
+        st.hits.add(r, 2, 1, cols - 4, ("sel", "sched_sel", i, True))
         r += 1
 
 
@@ -611,16 +593,12 @@ def view_groups(cv, top, bottom, cols, st, frame):
 
 
 def draw_group_table(cv, r, c, w, g):
-    cv.put(r, c, g.name, fg(*P.gold) + BOLD)
-    cv.hline(r, c + term.display_width(g.name) + 1, max(0, w - term.display_width(g.name) - 1),
-             fg(*P.line), "─")
-    cv.put(r + 1, c + 1, "#", fg(*P.faint))
-    cv.put(r + 1, c + 4, "Team", fg(*P.faint))
-    cv.put(r + 1, c + w - 13, "Pl", fg(*P.faint))
-    cv.put(r + 1, c + w - 9, "GD", fg(*P.faint))
-    cv.put(r + 1, c + w - 4, "Pts", fg(*P.faint))
+    # column layout: rank / header-# / swatch / flex team / Pl / GD / Pts
+    cols_spec = [("", 1, "left"), ("#", 1, "left"), ("", 2, "left"),
+                 ("Team", -1, "left"), ("Pl", 4, "left"),
+                 ("GD", 5, "left"), ("Pts", 4, "left")]
+    rows = []
     for i, row in enumerate(g.rows[:4]):
-        rr = r + 2 + i
         rank = row.rank or (i + 1)
         if row.qual_color:
             qrgb = term.hex_rgb(row.qual_color) or P.dim
@@ -636,13 +614,19 @@ def draw_group_table(cv, r, c, w, g):
             namecol = fg(*P.dim)
         else:
             namecol = fg(*P.text)
-        cv.put(rr, c, str(rank), fg(*qrgb) + BOLD)
-        cv.put(rr, c + 2, "▌", fg_hex(team_hex(row.id, row.abbr)))
         label = f"{row.abbr} {row.name}"
-        cv.put(rr, c + 4, term.strip_ansi(term.truncate(label, w - 18)), namecol)
-        cv.put(rr, c + w - 13, f"{row.gp:>2}", fg(*P.dim))
-        cv.put(rr, c + w - 9, term.pad(str(row.gd_disp), 3, "right"), fg(*P.text))
-        cv.put(rr, c + w - 4, term.pad(str(row.pts), 3, "right"), fg(*P.gold) + BOLD)
+        rows.append([
+            (str(rank), fg(*qrgb) + BOLD),
+            None,
+            ("▌", fg_hex(team_hex(row.id, row.abbr))),
+            (term.strip_ansi(term.truncate(label, w - 18)), namecol),
+            (f"{row.gp:>2}", fg(*P.dim)),
+            (term.pad(str(row.gd_disp), 3, "right"), fg(*P.text)),
+            (term.pad(str(row.pts), 3, "right"), fg(*P.gold) + BOLD),
+        ])
+    widgets.draw_table(cv, r, c, w, cols_spec, rows,
+                       title=g.name, title_style=fg(*P.gold) + BOLD,
+                       rule_style=fg(*P.line), header_style=fg(*P.faint))
 
 
 def view_bracket(cv, top, bottom, cols, st, frame):
@@ -650,12 +634,23 @@ def view_bracket(cv, top, bottom, cols, st, frame):
     if not br or not any(br.values()):
         center_msg(cv, top, bottom, cols, "Loading knockout bracket…")
         return
-    big = build_bracket_canvas(br, frame)
+    big, cells = build_bracket_canvas(br, frame)
     vh = bottom - top + 1
     vw = cols - 2
     st.bracket_scroll_y = max(0, min(st.bracket_scroll_y, max(0, big.h - vh)))
     st.bracket_scroll_x = max(0, min(st.bracket_scroll_x, max(0, big.w - vw)))
     oy, ox = st.bracket_scroll_y, st.bracket_scroll_x
+    # register the visible slice of each match box as clickable
+    for cy, cx, m in cells:
+        if not m:
+            continue
+        r0 = top + (cy - 1) - oy          # box top row on screen
+        c0 = 2 + cx - ox
+        rr = max(r0, top)
+        rc = max(c0, 2)
+        rh = min(r0 + 4, bottom + 1) - rr
+        rw = min(c0 + CELL_W, 2 + vw) - rc
+        st.hits.add(rr, rc, rh, rw, ("open", m.id))
     for y in range(vh):
         sy = y + oy
         if sy >= big.h:
@@ -741,110 +736,36 @@ def _bracket_model(br):
     return numbered, feeders
 
 
-def _bracket_positions(numbered, feeders):
-    """Vertical centre for every match so real feeders sit adjacent (no crossings)."""
-    order, seen = [], set()
-
-    def walk(slug, i):
-        if i is None or not (0 <= i < len(numbered.get(slug, []))):
-            return
-        if slug == "round-of-32":
-            if i not in seen:
-                seen.add(i)
-                order.append(i)
-            return
-        fa, fh = feeders.get((slug, i), (None, None))
-        walk(KO_PREV[slug], fa)
-        walk(KO_PREV[slug], fh)
-
-    if numbered.get("final"):
-        walk("final", 0)
-    else:
-        for slug in ("semifinals", "quarterfinals", "round-of-16"):
-            if numbered.get(slug):
-                for i in range(len(numbered[slug])):
-                    walk(slug, i)
-                break
-    for i in range(len(numbered.get("round-of-32", []))):  # leaves the walk missed
-        if i not in seen:
-            seen.add(i)
-            order.append(i)
-
-    leafpos = {leaf: pos for pos, leaf in enumerate(order)}
-    ypos = {("round-of-32", i): leafpos.get(i, i) * UNIT + 2
-            for i in range(len(numbered.get("round-of-32", [])))}
-    for slug in KO_ORDER[1:]:
-        prev, depth = KO_PREV[slug], KO_ORDER.index(slug)
-        for i in range(len(numbered.get(slug, []))):
-            fa, fh = feeders.get((slug, i), (None, None))
-            ys = [ypos[(prev, f)] for f in (fa, fh)
-                  if f is not None and (prev, f) in ypos]
-            ypos[(slug, i)] = (sum(ys) / len(ys) if ys
-                               else i * UNIT * (2 ** depth) + (2 ** depth))
-    return ypos
-
-
 def build_bracket_canvas(br, frame):
+    """Returns (canvas, cells) where cells is [(cy, cx, match)] for hit-testing."""
     numbered, feeders = _bracket_model(br)
-    ypos = _bracket_positions(numbered, feeders)
-    n0 = max(1, len(numbered.get("round-of-32", [])) or 16)
-    height = n0 * UNIT + 6
-    width = len(KO_ORDER) * (CELL_W + COL_GAP) + 6
-    cv = ui.Canvas(width, height, bg(*P.bg0))
+    sizes = [len(numbered.get(slug, [])) for slug in KO_ORDER]
+    ridx = {slug: i for i, slug in enumerate(KO_ORDER)}
+    idx_feeders = {(ridx[slug], i): v for (slug, i), v in feeders.items()}
+    cells = []
 
-    colx, x = {}, 2
-    for slug in KO_ORDER:
-        colx[slug] = x
-        x += CELL_W + COL_GAP
+    def cell(cv, cy, cx, ri, i):
+        m = numbered[KO_ORDER[ri]][i]
+        cells.append((cy, cx, m))
+        draw_bracket_cell(cv, cy, cx, m, frame)
 
-    def cy_of(slug, i):
-        return int(round(ypos.get((slug, i), 2)))
-
-    # connectors first so cell boxes overlay the line ends cleanly
-    for slug in KO_ORDER[1:]:
-        prev, cx = KO_PREV[slug], colx[slug]
-        gutter, prev_right = cx - 3, colx[KO_PREV[slug]] + CELL_W - 1
-        for i in range(len(numbered.get(slug, []))):
-            fa, fh = feeders.get((slug, i), (None, None))
-            child_ys = [cy_of(prev, f) for f in (fa, fh)
-                        if f is not None and (prev, f) in ypos]
-            if child_ys:
-                draw_connector(cv, min(child_ys), max(child_ys),
-                               cy_of(slug, i), prev_right, gutter, cx)
-
-    for slug in KO_ORDER:
-        cx = colx[slug]
-        cv.put(0, cx + 3, _ROUND_LABELS.get(slug, slug), fg(*P.gold) + BOLD)
-        for i, m in enumerate(numbered.get(slug, [])):
-            draw_bracket_cell(cv, cy_of(slug, i), cx, m, frame)
+    cv, colx, ypos = widgets.draw_bracket(
+        sizes, idx_feeders, cell,
+        labels=[_ROUND_LABELS.get(s, s) for s in KO_ORDER],
+        label_style=fg(*P.gold) + BOLD, connector_style=fg(*P.line),
+        bg_style=bg(*P.bg0), unit=UNIT, cell_w=CELL_W, col_gap=COL_GAP,
+        fallback_leaves=16)
 
     # 3rd-place match under the final column
     third = br.get("3rd-place-match", [])
     if third:
-        ty = cy_of("final", 0) + 5
-        if ty + 3 < height:
-            cv.put(ty - 2, colx["final"] + 3, "3rd Place", fg(*P.dim) + BOLD)
-            draw_bracket_cell(cv, ty, colx["final"], third[0], frame)
-    return cv
-
-
-def draw_connector(cv, c1, c2, cc, prev_right, gx, next_left):
-    """Join two child cells (rows c1,c2) to a parent cell (row cc)."""
-    lo, hi = min(c1, c2), max(c1, c2)
-    col = fg(*P.line)
-    # stubs from each child's right edge to the gutter
-    for cr in (c1, c2):
-        for x in range(prev_right, gx):
-            cv.put(cr, x, "─", col)
-    # vertical spine
-    for y in range(lo, hi + 1):
-        cv.put(y, gx, "│", col)
-    cv.put(lo, gx, "╮", col)
-    cv.put(hi, gx, "╯", col)
-    # branch out to the parent (rightward), so the spine tee must open right
-    cv.put(cc, gx, "├", col)
-    for x in range(gx + 1, next_left):
-        cv.put(cc, x, "─", col)
+        fin = len(KO_ORDER) - 1
+        ty = int(round(ypos.get((fin, 0), 2))) + 5
+        if ty + 3 < cv.h:
+            cv.put(ty - 2, colx[fin] + 3, "3rd Place", fg(*P.dim) + BOLD)
+            draw_bracket_cell(cv, ty, colx[fin], third[0], frame)
+            cells.append((ty, colx[fin], third[0]))
+    return cv, cells
 
 
 def draw_bracket_cell(cv, cy, cx, m, frame):
@@ -893,7 +814,9 @@ def view_scorers(cv, top, bottom, cols, st, frame):
         stl = (bg(*P.gold) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
         icon = "⚽ " if i == 0 else "🅰 "
         cv.put(top, x, f" {icon}{lbl} ", stl)
-        x += term.display_width(f" {icon}{lbl} ") + 1
+        tw = term.display_width(f" {icon}{lbl} ")
+        st.hits.add(top, x, 1, tw, ("scorers_tab", i))
+        x += tw + 1
     cv.put(top, cols - 18, "←→ switch board", fg(*P.faint))
     cv.hline(top + 1, 2, cols - 4, fg(*P.line))
 
@@ -919,10 +842,11 @@ def view_scorers(cv, top, bottom, cols, st, frame):
         cv.put(r, 9, term.pad(row["name"], 24), bgs + fg(*P.text) + (BOLD if i < 3 else ""))
         cv.put(r, 34, term.pad(row.get("team_abbr", ""), 5), bgs + fg(*P.dim))
         # bar — value sits right after the bar's fill so it tracks the bar length
-        filln = int(round(row["value"] / maxval * barmax))
         bx = 40
-        cv.put(r, bx, "█" * filln, bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
+        filln = widgets.draw_hbar(cv, r, bx, barmax, row["value"] / maxval,
+                                  bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
         cv.put(r, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
+        st.hits.add(r, 2, 1, cols - 4, ("sel", "scorers_sel", i, False))
         r += 1
 
 
@@ -951,6 +875,7 @@ def view_detail(cv, top, bottom, cols, st, frame):
         on = i == st.detail_tab
         stl = (bg(*P.accent) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
         cv.put(htop, x, f" {lbl} ", stl)
+        st.hits.add(htop, x, 1, term.display_width(lbl) + 2, ("detail_tab", i))
         x += term.display_width(lbl) + 3
     cv.put(htop, cols - 16, "←→ tabs · esc back", fg(*P.faint))
     cv.hline(htop + 1, 2, cols - 4, fg(*P.line))
@@ -1204,42 +1129,18 @@ def draw_stats(cv, top, bottom, cols, m, detail):
     cv.put(top, 6, a, acol + BOLD)
     cv.put(top, cols - 6 - term.display_width(h), h, hcol + BOLD)
     cv.put(top, (cols - 8) // 2, "stat", fg(*P.faint))
-    # bar geometry
-    bar_l = 14
-    bar_r = cols - 14
-    barW = bar_r - bar_l
-    mid = (bar_l + bar_r) // 2
     r = top + 2
     for label, av, hv in rows:
         if r > bottom:
             break
-        cv.put(r, 6, term.pad(str(av), 6, "right"), acol + BOLD)
-        cv.put(r, cols - 12, term.pad(str(hv), 6), hcol + BOLD)
-        cv.put(r, (cols - term.display_width(label)) // 2, label, fg(*P.dim))
         # split bar centered: away grows left from mid, home grows right
-        af, hf = bar_fracs(av, hv)
-        an = int(round(af * (barW // 2)))
-        hn = int(round(hf * (barW // 2)))
-        track = bg(*P.bg1)
-        cv.fill_rect(r + 1, bar_l, 1, barW, track)
-        for i in range(an):
-            cv.put(r + 1, mid - 1 - i, "█", track + acol)
-        for i in range(hn):
-            cv.put(r + 1, mid + i, "█", track + hcol)
-        cv.put(r + 1, mid, "▏", track + fg(*P.faint))
-        r += 2
-
-
-def bar_fracs(av, hv):
-    try:
-        a = float(str(av).replace("%", ""))
-        h = float(str(hv).replace("%", ""))
-    except ValueError:
-        return 0.5, 0.5
-    tot = a + h
-    if tot <= 0:
-        return 0.0, 0.0
-    return a / tot, h / tot
+        r += widgets.draw_duel_row(cv, r, 6, cols - 12, label, av, hv,
+                                   acol, hcol,
+                                   label_style=fg(*P.dim),
+                                   track_style=bg(*P.bg1),
+                                   lval_style=acol + BOLD,
+                                   rval_style=hcol + BOLD,
+                                   divider_style=fg(*P.faint))
 
 
 # ----------------------------------------------------------------------------
@@ -1296,6 +1197,7 @@ def view_team(cv, top, bottom, cols, st, frame):
         if r > bottom:
             break
         draw_compact_row(cv, r, 2, cols - 4, m, i == st.sched_sel, frame, left="date")
+        st.hits.add(r, 2, 1, cols - 4, ("sel", "sched_sel", i, True))
         r += 1
 
 
@@ -1340,8 +1242,7 @@ def view_help(cv, top, bottom, cols, st, frame):
 # ----------------------------------------------------------------------------
 
 def center_msg(cv, top, bottom, cols, msg):
-    y = (top + bottom) // 2
-    cv.put(y, max(2, (cols - term.display_width(msg)) // 2), msg, fg(*P.dim) + ITALIC)
+    widgets.center_msg(cv, top, bottom, cols, msg, fg(*P.dim) + ITALIC)
 
 
 def context_label(st):
@@ -1372,10 +1273,11 @@ def context_label(st):
 
 def render(state, cols, rows):
     st = state
-    cv = ui.Canvas(cols, rows, base())
+    cv = Canvas(cols, rows, base())
     with st.lock:
         st.frame += 1
         frame = st.frame
+        st.hits.clear()   # clickable regions track exactly this frame
         draw_header(cv, cols, st, frame)
         draw_tabs(cv, cols, st)
         draw_context(cv, cols, st, context_label(st))
