@@ -854,7 +854,8 @@ def view_scorers(rg, st, frame):
 DETAIL_TABS = ["Lineups", "Timeline", "Stats"]
 
 
-def view_detail(cv, top, bottom, cols, st, frame):
+def view_detail(rg, st, frame):
+    """Match centre. `rg` spans the body rows below the context strip."""
     eid = st.detail_event_id
     detail = st.summaries.get(eid)
     m = st.match_index.get(eid)
@@ -864,104 +865,95 @@ def view_detail(cv, top, bottom, cols, st, frame):
         m.venue = detail.venue
     # score header (with a compact odds strip for upcoming matches)
     od = match_odds(m, detail)
-    draw_detail_header(cv, top, cols, m, frame, od)
-    htop = top + 4
+    draw_detail_header(rg.rows(0, 3), m, frame, od)
     # tabs
     x = 2
     for i, lbl in enumerate(DETAIL_TABS):
         on = i == st.detail_tab
         stl = (bg(*P.accent) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
-        cv.put(htop, x, f" {lbl} ", stl)
-        st.hits.add(htop, x, 1, term.display_width(lbl) + 2, ("detail_tab", i))
+        rg.put(4, x, f" {lbl} ", stl)
+        rg.hit(("detail_tab", i), 4, x, 1, term.display_width(lbl) + 2)
         x += term.display_width(lbl) + 3
-    cv.put(htop, cols - 16, "←→ tabs · esc back", fg(*P.faint))
-    cv.hline(htop + 1, 2, cols - 4, fg(*P.line))
-    body_top = htop + 2
+    rg.put(4, rg.w - 16, "←→ tabs · esc back", fg(*P.faint))
+    rg.hline(5, 2, rg.w - 4, fg(*P.line))
+    body = rg.rows(6)
     if detail is None:
-        center_msg(cv, body_top, bottom, cols, "Loading match details…")
+        center_msg(body, 0, body.h - 1, body.w, "Loading match details…")
         return
     if st.detail_tab == 0:
-        draw_lineups(cv, body_top, bottom, cols, m, detail)
+        draw_lineups(body, m, detail)
     elif st.detail_tab == 1:
-        draw_timeline(cv, body_top, bottom, cols, m, detail, st)
+        draw_timeline(body, m, detail, st)
     else:
-        draw_stats(cv, body_top, bottom, cols, m, detail)
+        draw_stats(body, m, detail)
 
 
-def draw_detail_odds_strip(cv, row, cols, m, od):
-    """One-line moneyline strip (shown on every detail tab for pre-match)."""
-    x = 2
-    cv.put(row, x, "Odds", bg(*P.bg1) + fg(*P.faint))
-    x += 6
+def draw_detail_odds_strip(rg, m, od):
+    """One-line moneyline strip (shown on every detail tab for pre-match).
+    `rg` is the single strip row."""
+    x = rg.put(0, 2, "Odds", bg(*P.bg1) + fg(*P.faint)) + 2
     for i, (name, abbr, hexcol, p) in enumerate(_prob_rows(m, od)):
         if i:
-            cv.put(row, x, "·", bg(*P.bg1) + fg(*P.faint))
-            x += 2
+            x = rg.put(0, x, "·", bg(*P.bg1) + fg(*P.faint)) + 1
         col = fg(*P.faint) if hexcol is None else fg_hex(hexcol)
-        cv.put(row, x, abbr, bg(*P.bg1) + col + BOLD)
-        x += term.display_width(abbr) + 1
-        pct = f"{round(p * 100)}%"
-        cv.put(row, x, pct, bg(*P.bg1) + fg(*P.text))
-        x += term.display_width(pct) + 1
+        x = rg.put(0, x, abbr, bg(*P.bg1) + col + BOLD) + 1
+        x = rg.put(0, x, f"{round(p * 100)}%", bg(*P.bg1) + fg(*P.text)) + 1
     right = ""
     if od.over_under is not None:
         right += f"O/U {od.over_under}    "
     right += od.provider or ""
     if right.strip():
-        rx = cols - term.display_width(right) - 2
+        rx = rg.w - term.display_width(right) - 2
         if rx > x + 2:
-            cv.put(row, rx, right, bg(*P.bg1) + fg(*P.faint))
+            rg.put(0, rx, right, bg(*P.bg1) + fg(*P.faint))
 
 
-def draw_detail_header(cv, top, cols, m, frame, od=None):
-    cv.fill_rect(top, 0, 3, cols, bg(*P.bg1))
+def draw_detail_header(rg, m, frame, od=None):
+    """Three-row score header filling the Region `rg`."""
+    rg.fill(bg(*P.bg1))
     if not m:
-        cv.put(top + 1, 2, "match", fg(*P.text) + BOLD)
+        rg.put(1, 2, "match", fg(*P.text) + BOLD)
         return
     a, h = m.away, m.home
     rnd = espn.ROUND_LABEL.get(m.season_slug, "")
-    cv.put(top, 2, f"{rnd}  ·  {m.venue}", bg(*P.bg1) + fg(*P.dim))
+    rg.put(0, 2, f"{rnd}  ·  {m.venue}", bg(*P.bg1) + fg(*P.dim))
     stxt, sstyle = status_text(m, frame)
-    cv.put(top, cols - term.display_width(stxt) - 2, stxt, bg(*P.bg1) + sstyle)
+    rg.right(stxt, bg(*P.bg1) + sstyle, pad=2)
     # big score line
     aw = (a.name if a else "?")
     hw = (h.name if h else "?")
     sc = f"{score_str(a)}  -  {score_str(h)}"
     line = f"{aw}    {sc}    {hw}"
-    cx = max(2, (cols - term.display_width(line)) // 2)
-    x = cx
-    cv.put(top + 1, x, "● ", bg(*P.bg1) + fg_hex(team_hex(a.id if a else None, a.abbr if a else None)))
-    x += 2
-    cv.put(top + 1, x, aw, bg(*P.bg1) + fg(*P.white) + BOLD + (BOLD if a and a.winner else ""))
-    x += term.display_width(aw)
-    cv.put(top + 1, x, "    ", bg(*P.bg1))
-    x += 4
-    cv.put(top + 1, x, sc, bg(*P.bg1) + fg(*P.gold) + BOLD)
-    x += term.display_width(sc) + 4
-    cv.put(top + 1, x, hw, bg(*P.bg1) + fg(*P.white) + BOLD)
-    x += term.display_width(hw) + 1
-    cv.put(top + 1, x, " ●", bg(*P.bg1) + fg_hex(team_hex(h.id if h else None, h.abbr if h else None)))
+    cx = max(2, (rg.w - term.display_width(line)) // 2)
+    (rg.at(1, cx)
+       .write("● ", bg(*P.bg1) + fg_hex(team_hex(a.id if a else None, a.abbr if a else None)))
+       .write(aw, bg(*P.bg1) + fg(*P.white) + BOLD + (BOLD if a and a.winner else ""))
+       .write("    ", bg(*P.bg1))
+       .write(sc, bg(*P.bg1) + fg(*P.gold) + BOLD)
+       .gap(4)
+       .write(hw, bg(*P.bg1) + fg(*P.white) + BOLD)
+       .gap(1)
+       .write(" ●", bg(*P.bg1) + fg_hex(team_hex(h.id if h else None, h.abbr if h else None))))
     if od is not None and m.is_pre:
-        draw_detail_odds_strip(cv, top + 2, cols, m, od)
+        draw_detail_odds_strip(rg.rows(2, 3), m, od)
 
 
-def draw_lineups(cv, top, bottom, cols, m, detail):
+def draw_lineups(rg, m, detail):
     if not detail.lineups:
         od = match_odds(m, detail)
         if od:
-            draw_odds_panel(cv.region(top, 0, bottom - top + 1, cols), m, od)
+            draw_odds_panel(rg, m, od)
         else:
-            center_msg(cv, top, bottom, cols, "Lineups not available yet (released ~1h before kickoff).")
+            center_msg(rg, 0, rg.h - 1, rg.w, "Lineups not available yet (released ~1h before kickoff).")
         return
     # away on left pitch-half, home on right; or stacked pitch. Use a vertical
     # pitch split into two halves stacked: away top, home bottom.
     away = next((l for l in detail.lineups if l.home_away == "away"), detail.lineups[0])
     home = next((l for l in detail.lineups if l.home_away == "home"),
                 detail.lineups[-1])
-    pitch_w = min(cols - 4, 96)
-    px = 2 + (cols - 4 - pitch_w) // 2
-    ph = bottom - top + 1
-    draw_pitch(cv, top, px, ph, pitch_w, away, home, m)
+    pitch_w = min(rg.w - 4, 96)
+    px = 2 + (rg.w - 4 - pitch_w) // 2
+    draw_pitch(rg.sub(0, px, rg.h, pitch_w), away, home, m)
 
 
 def formation_lines(lineup):
@@ -1005,31 +997,34 @@ def formation_lines(lineup):
     return rows
 
 
-def draw_pitch(cv, top, px, ph, pw, away, home, m):
+def draw_pitch(rg, away, home, m):
+    """The stacked lineup pitch filling the Region `rg` (away top half)."""
     pitch_style = bg(*P.pitch) + fg(*(210, 235, 215))
-    cv.fill_rect(top, px, ph, pw, pitch_style)
+    rg.fill(pitch_style)
     # stripes
-    for x in range(px, px + pw):
-        if ((x - px) // 4) % 2 == 0:
-            for y in range(top, top + ph):
-                cv.grid[y][x].style = bg(*(36, 120, 70)) + fg(*(210, 235, 215))
-    midy = top + ph // 2
-    cv.hline(midy, px, pw, bg(*P.pitch) + fg(*(150, 200, 165)), "─")
-    cv.put(midy, px + pw // 2 - 1, "◯", bg(*P.pitch) + fg(*(150, 200, 165)))
+    stripe_style = bg(*(36, 120, 70)) + fg(*(210, 235, 215))
+    for x in range(0, rg.w, 8):
+        rg.fill_rect(0, x, rg.h, min(4, rg.w - x), stripe_style)
+    midy = rg.h // 2
+    rg.hline(midy, 0, rg.w, bg(*P.pitch) + fg(*(150, 200, 165)), "─")
+    rg.put(midy, rg.w // 2 - 1, "◯", bg(*P.pitch) + fg(*(150, 200, 165)))
 
-    # away occupies top half (rows top..midy-1), home bottom half
-    half = ph // 2
+    # away occupies top half (rows 0..midy-1), home bottom half
+    half = rg.h // 2
     aw_rows = formation_lines(away)
     hm_rows = formation_lines(home)
     # away: GK near top edge -> forwards near mid
-    place_formation(cv, top, px, half - 1, pw, aw_rows, away, m, invert=False)
-    place_formation(cv, midy + 1, px, half - 1, pw, hm_rows, home, m, invert=True)
+    place_formation(rg, 0, half - 1, aw_rows, away, m, invert=False)
+    place_formation(rg, midy + 1, half - 1, hm_rows, home, m, invert=True)
     # team labels
-    cv.put(top, px + 1, f" {away.abbr} {away.formation} ▲ ", bg(*P.bg1) + fg_hex(team_hex(away.team_id, away.abbr)) + BOLD)
-    cv.put(top + ph - 1, px + 1, f" {home.abbr} {home.formation} ▼ ", bg(*P.bg1) + fg_hex(team_hex(home.team_id, home.abbr)) + BOLD)
+    rg.put(0, 1, f" {away.abbr} {away.formation} ▲ ", bg(*P.bg1) + fg_hex(team_hex(away.team_id, away.abbr)) + BOLD)
+    rg.put(rg.h - 1, 1, f" {home.abbr} {home.formation} ▼ ", bg(*P.bg1) + fg_hex(team_hex(home.team_id, home.abbr)) + BOLD)
 
 
-def place_formation(cv, y0, px, height, pw, rows, lineup, m, invert):
+def place_formation(rg, y0, height, rows, lineup, m, invert):
+    """Lay one team's lines onto the FULL pitch Region `rg`, offset by the
+    local row `y0` (never a half sub-region: inverted front lines print
+    names at ry-1, on the midline row)."""
     if not rows:
         return
     n = len(rows)
@@ -1042,16 +1037,16 @@ def place_formation(cv, y0, px, height, pw, rows, lineup, m, invert):
         ry = y0 + int(frac * (height - 1))
         k = len(line)
         for pi, p in enumerate(line):
-            cx = px + int((pi + 0.5) / k * pw)
+            cx = int((pi + 0.5) / k * rg.w)
             chip = f"{p.jersey}"
             col = fg_hex(team_hex(lineup.team_id, lineup.abbr))
-            cv.put(ry, cx - 1, "▟", bg(*P.pitch) + col)
-            cv.put(ry, cx, chip, bg_team(lineup) + fg(*P.bg0) + BOLD)
+            rg.put(ry, cx - 1, "▟", bg(*P.pitch) + col)
+            rg.put(ry, cx, chip, bg_team(lineup) + fg(*P.bg0) + BOLD)
             # name below
             nm = p.short or p.name
             nm = nm.split()[-1] if nm else "?"
             nx = cx - len(nm) // 2
-            cv.put(ry + (1 if not invert else -1), max(px, nx), term.strip_ansi(term.truncate(nm, 12)),
+            rg.put(ry + (1 if not invert else -1), max(0, nx), term.strip_ansi(term.truncate(nm, 12)),
                    bg(*P.pitch) + fg(*(235, 245, 235)) + BOLD)
 
 
@@ -1060,24 +1055,24 @@ def bg_team(lineup):
     return bg(*rgb)
 
 
-def draw_timeline(cv, top, bottom, cols, m, detail, st):
+def draw_timeline(rg, m, detail, st):
     events = [e for e in detail.key_events
               if e.type in ("Goal", "Yellow Card", "Red Card", "Substitution",
                             "Penalty - Scored", "Penalty - Missed") or e.scoring]
     if not events:
-        center_msg(cv, top, bottom, cols, "No key events yet.")
+        center_msg(rg, 0, rg.h - 1, rg.w, "No key events yet.")
         return
     away_id = m.away.id if m and m.away else None
-    spine = cols // 2
-    cv.vline(top, spine, bottom - top + 1, fg(*P.line), "┊")
+    spine = rg.w // 2
+    rg.vline(0, spine, style=fg(*P.line), ch="┊")
     # team headers
     if m and m.away:
-        cv.put(top - 0, spine - 6 - term.display_width(m.away.name), m.away.name,
+        rg.put(0, spine - 6 - term.display_width(m.away.name), m.away.name,
                fg_hex(team_hex(m.away.id, m.away.abbr)) + BOLD)
-    st.detail_scroll = max(0, min(st.detail_scroll, max(0, len(events) - (bottom - top))))
-    r = top + 1
+    st.detail_scroll = max(0, min(st.detail_scroll, max(0, len(events) - (rg.h - 1))))
+    r = 1
     for e in events[st.detail_scroll:]:
-        if r > bottom:
+        if r >= rg.h:
             break
         icon, istyle = event_icon(e)
         is_away = e.team_id == away_id
@@ -1087,16 +1082,16 @@ def draw_timeline(cv, top, bottom, cols, m, detail, st):
             label = (e.players[0] if e.players else e.team)
         minute = e.minute or ""
         # minute chip sits on the spine (no icon overlap)
-        cv.put(r, spine - 3, term.pad(minute, 7, "center"), bg(*P.bg2) + fg(*P.gold) + BOLD)
+        rg.put(r, spine - 3, term.pad(minute, 7, "center"), bg(*P.bg2) + fg(*P.gold) + BOLD)
         label = term.strip_ansi(label)
         if is_away:
             text = f"{label} {icon}"
             tx = spine - 4 - term.display_width(term.strip_ansi(text))
-            cv.put(r, max(2, tx), term.strip_ansi(text),
+            rg.put(r, max(2, tx), term.strip_ansi(text),
                    (fg(*P.white) + BOLD if e.scoring else istyle))
         else:
             text = f"{icon} {label}"
-            cv.put(r, spine + 4, term.strip_ansi(text),
+            rg.put(r, spine + 4, term.strip_ansi(text),
                    (fg(*P.white) + BOLD if e.scoring else istyle))
         r += 1
 
@@ -1114,30 +1109,29 @@ def event_icon(e):
     return "•", fg(*P.dim)
 
 
-def draw_stats(cv, top, bottom, cols, m, detail):
+def draw_stats(rg, m, detail):
     rows = detail.team_stats()
     if not rows:
-        center_msg(cv, top, bottom, cols, "Match stats not available yet.")
+        center_msg(rg, 0, rg.h - 1, rg.w, "Match stats not available yet.")
         return
     a = m.away.abbr if m and m.away else "AWAY"
     h = m.home.abbr if m and m.home else "HOME"
     acol = fg_hex(team_hex(m.away.id if m and m.away else None, a))
     hcol = fg_hex(team_hex(m.home.id if m and m.home else None, h))
-    cv.put(top, 6, a, acol + BOLD)
-    cv.put(top, cols - 6 - term.display_width(h), h, hcol + BOLD)
-    cv.put(top, (cols - 8) // 2, "stat", fg(*P.faint))
-    r = top + 2
+    rg.put(0, 6, a, acol + BOLD)
+    rg.put(0, rg.w - 6 - term.display_width(h), h, hcol + BOLD)
+    rg.put(0, (rg.w - 8) // 2, "stat", fg(*P.faint))
+    r = 2
     for label, av, hv in rows:
-        if r > bottom:
+        if r >= rg.h:
             break
         # split bar centered: away grows left from mid, home grows right
-        r += widgets.draw_duel_row(cv, r, 6, cols - 12, label, av, hv,
-                                   acol, hcol,
-                                   label_style=fg(*P.dim),
-                                   track_style=bg(*P.bg1),
-                                   lval_style=acol + BOLD,
-                                   rval_style=hcol + BOLD,
-                                   divider_style=fg(*P.faint))
+        r += rg.duel(label, av, hv, acol, hcol, r=r, c=6, w=rg.w - 12,
+                     label_style=fg(*P.dim),
+                     track_style=bg(*P.bg1),
+                     lval_style=acol + BOLD,
+                     rval_style=hcol + BOLD,
+                     divider_style=fg(*P.faint))
 
 
 # ----------------------------------------------------------------------------
@@ -1298,7 +1292,7 @@ def render(state, cols, rows):
             elif v == S.SCORERS:
                 view_scorers(body, st, frame)
             elif v == S.DETAIL:
-                view_detail(cv, top, bottom, cols, st, frame)
+                view_detail(body, st, frame)
             elif v == S.TEAM:
                 view_team(body, st, frame)
             elif v == S.HELP:
