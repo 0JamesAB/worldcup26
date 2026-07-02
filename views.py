@@ -560,34 +560,34 @@ def view_schedule(cv, top, bottom, cols, st, frame):
         r += 1
 
 
-def view_groups(cv, top, bottom, cols, st, frame):
+def view_groups(rg, st, frame):
     groups = st.standings
     if not groups:
-        center_msg(cv, top, bottom, cols, "Loading group tables…")
+        center_msg(rg, 0, rg.h - 1, rg.w, "Loading group tables…")
         return
     gw = 42
-    ncols = max(1, min(4, (cols - 2) // gw))
-    gw = min(48, (cols - 2) // ncols)
+    ncols = max(1, min(4, (rg.w - 2) // gw))
+    gw = min(48, (rg.w - 2) // ncols)
     gh = 7  # title + sep + header + 4 rows
-    rows_per_screen = (bottom - top + 1) // gh
+    rows_per_screen = rg.h // gh
     total_rows = (len(groups) + ncols - 1) // ncols
     st.groups_scroll = max(0, min(st.groups_scroll, max(0, total_rows - rows_per_screen)))
     skip = st.groups_scroll * ncols
-    r = top
+    r = 0
     idx = skip
-    while idx < len(groups) and r + gh - 1 <= bottom + 1:
+    while idx < len(groups) and r + gh - 1 <= rg.h:
         for cc in range(ncols):
             if idx >= len(groups):
                 break
-            draw_group_table(cv, r, 2 + cc * gw, gw - 2, groups[idx])
+            draw_group_table(rg.sub(r, 2 + cc * gw, gh, gw - 2), groups[idx])
             idx += 1
         r += gh
     if total_rows > rows_per_screen:
-        cv.put(bottom, cols - 22, f"↑↓ scroll  {st.groups_scroll+1}/{max(1,total_rows-rows_per_screen+1)}",
+        rg.put(rg.h - 1, rg.w - 22, f"↑↓ scroll  {st.groups_scroll+1}/{max(1,total_rows-rows_per_screen+1)}",
                fg(*P.faint))
 
 
-def draw_group_table(cv, r, c, w, g):
+def draw_group_table(rg, g):
     # column layout: rank / header-# / swatch / flex team / Pl / GD / Pts
     cols_spec = [("", 1, "left"), ("#", 1, "left"), ("", 2, "left"),
                  ("Team", -1, "left"), ("Pl", 4, "left"),
@@ -614,14 +614,14 @@ def draw_group_table(cv, r, c, w, g):
             (str(rank), fg(*qrgb) + BOLD),
             None,
             ("▌", fg_hex(team_hex(row.id, row.abbr))),
-            (term.strip_ansi(term.truncate(label, w - 18)), namecol),
+            (term.strip_ansi(term.truncate(label, rg.w - 18)), namecol),
             (f"{row.gp:>2}", fg(*P.dim)),
             (term.pad(str(row.gd_disp), 3, "right"), fg(*P.text)),
             (term.pad(str(row.pts), 3, "right"), fg(*P.gold) + BOLD),
         ])
-    widgets.draw_table(cv, r, c, w, cols_spec, rows,
-                       title=g.name, title_style=fg(*P.gold) + BOLD,
-                       rule_style=fg(*P.line), header_style=fg(*P.faint))
+    rg.table(cols_spec, rows,
+             title=g.name, title_style=fg(*P.gold) + BOLD,
+             rule_style=fg(*P.line), header_style=fg(*P.faint))
 
 
 def view_bracket(cv, top, bottom, cols, st, frame):
@@ -801,47 +801,49 @@ def draw_bracket_cell(cv, cy, cx, m, frame):
             cv.put(rr, cx + w - 1, "‹", inner + fg(*P.gold))
 
 
-def view_scorers(cv, top, bottom, cols, st, frame):
+def view_scorers(rg, st, frame):
     tabs = [("Goals", "goals"), ("Assists", "assists")]
     x = 2
     for i, (lbl, _) in enumerate(tabs):
         on = i == st.scorers_tab
         stl = (bg(*P.gold) + fg(*P.bg0) + BOLD) if on else (bg(*P.bg1) + fg(*P.dim))
         icon = "⚽ " if i == 0 else "🅰 "
-        cv.put(top, x, f" {icon}{lbl} ", stl)
+        rg.put(0, x, f" {icon}{lbl} ", stl)
         tw = term.display_width(f" {icon}{lbl} ")
-        st.hits.add(top, x, 1, tw, ("scorers_tab", i))
+        rg.hit(("scorers_tab", i), 0, x, 1, tw)
         x += tw + 1
-    cv.put(top, cols - 18, "←→ switch board", fg(*P.faint))
-    cv.hline(top + 1, 2, cols - 4, fg(*P.line))
+    rg.put(0, rg.w - 18, "←→ switch board", fg(*P.faint))
+    rg.hline(1, 2, rg.w - 4, fg(*P.line))
 
     key = "goals" if st.scorers_tab == 0 else "assists"
     rows = st.scorers.get(key, [])
     if not rows:
-        center_msg(cv, top + 2, bottom, cols, "Loading leaderboard…")
+        center_msg(rg, 2, rg.h - 1, rg.w, "Loading leaderboard…")
         return
     maxval = max((r["value"] for r in rows), default=1) or 1
-    barmax = min(40, cols - 46)
-    r = top + 3
+    barmax = min(40, rg.w - 46)
+    r = 3
     st.scorers_sel = max(0, min(st.scorers_sel, len(rows) - 1))
     for i, row in enumerate(rows):
-        if r > bottom:
+        if r >= rg.h:
             break
         sel = i == st.scorers_sel
+        line = rg.rows(r, r + 1)
         if sel:
-            cv.fill_rect(r, 2, 1, cols - 4, bg(*P.bg2))
+            line.fill_rect(0, 2, 1, line.w - 4, bg(*P.bg2))
         bgs = bg(*P.bg2) if sel else bg(*P.bg0)
         medal = {0: "🥇", 1: "🥈", 2: "🥉"}.get(i, f"{i+1:>2}")
-        cv.put(r, 3, str(medal), bgs + fg(*P.gold))
-        cv.put(r, 7, "●", bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
-        cv.put(r, 9, term.pad(row["name"], 24), bgs + fg(*P.text) + (BOLD if i < 3 else ""))
-        cv.put(r, 34, term.pad(row.get("team_abbr", ""), 5), bgs + fg(*P.dim))
+        line.put(0, 3, str(medal), bgs + fg(*P.gold))
+        line.put(0, 7, "●", bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
+        line.put(0, 9, term.pad(row["name"], 24), bgs + fg(*P.text) + (BOLD if i < 3 else ""))
+        line.put(0, 34, term.pad(row.get("team_abbr", ""), 5), bgs + fg(*P.dim))
         # bar — value sits right after the bar's fill so it tracks the bar length
         bx = 40
-        filln = widgets.draw_hbar(cv, r, bx, barmax, row["value"] / maxval,
-                                  bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
-        cv.put(r, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
-        st.hits.add(r, 2, 1, cols - 4, ("sel", "scorers_sel", i, False))
+        filln = line.hbar(row["value"] / maxval,
+                          bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))),
+                          c=bx, w=barmax)
+        line.put(0, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
+        line.hit(("sel", "scorers_sel", i, False), 0, 2, 1, line.w - 4)
         r += 1
 
 
@@ -1200,14 +1202,14 @@ def view_team(cv, top, bottom, cols, st, frame):
 # help overlay
 # ----------------------------------------------------------------------------
 
-def view_help(cv, top, bottom, cols, st, frame):
-    bw = min(72, cols - 6)
-    bx = (cols - bw) // 2
-    bh = min(bottom - top + 1, 26)
-    cv.box(top, bx, bh, bw, style=fg(*P.accent), chars=HEAVY, title="HELP",
-           title_style=fg(*P.gold) + BOLD, fillstyle=bg(*P.bg1))
-    r = top + 1
-    cv.put(r, bx + 2, "KEYBOARD", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
+def view_help(rg, st, frame):
+    bw = min(72, rg.w - 6)
+    bx = (rg.w - bw) // 2
+    bh = min(rg.h, 26)
+    inner = rg.box(0, bx, bh, bw, style=fg(*P.accent), chars=HEAVY, title="HELP",
+                   title_style=fg(*P.gold) + BOLD, fillstyle=bg(*P.bg1))
+    r = 0
+    inner.put(r, 1, "KEYBOARD", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
     keys = [
         ("1-5", "switch view (Live / Schedule / Groups / Bracket / Scorers)"),
         ("Tab / Shift-Tab", "cycle views"),
@@ -1219,16 +1221,16 @@ def view_help(cv, top, bottom, cols, st, frame):
         ("r", "force refresh   ·   ? help   ·   q quit"),
     ]
     for k, d in keys:
-        cv.put(r, bx + 2, term.pad(k, 18), bg(*P.bg1) + fg(*P.gold) + BOLD)
-        cv.put(r, bx + 20, term.strip_ansi(term.truncate(d, bw - 22)), bg(*P.bg1) + fg(*P.text))
+        inner.put(r, 1, term.pad(k, 18), bg(*P.bg1) + fg(*P.gold) + BOLD)
+        inner.put(r, 19, term.strip_ansi(term.truncate(d, bw - 22)), bg(*P.bg1) + fg(*P.text))
         r += 1
     r += 1
-    cv.put(r, bx + 2, "COMMANDS  (type : then…)", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
+    inner.put(r, 1, "COMMANDS  (type : then…)", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
     for c, d in S.HELP_COMMANDS:
-        if r > top + bh - 2:
+        if r > bh - 3:
             break
-        cv.put(r, bx + 2, term.pad(c, 26), bg(*P.bg1) + fg(*P.accent2))
-        cv.put(r, bx + 28, term.strip_ansi(term.truncate(d, bw - 30)), bg(*P.bg1) + fg(*P.dim))
+        inner.put(r, 1, term.pad(c, 26), bg(*P.bg1) + fg(*P.accent2))
+        inner.put(r, 27, term.strip_ansi(term.truncate(d, bw - 30)), bg(*P.bg1) + fg(*P.dim))
         r += 1
 
 
@@ -1282,23 +1284,24 @@ def render(state, cols, rows):
         if bottom - top < 3:
             cv.put(rows // 2, 2, "terminal too small", fg(*P.red))
         else:
+            body = root.rows(top, -2)   # rows [top .. bottom] of the screen
             v = st.view
             if v == S.LIVE:
                 view_live(cv, top, bottom, cols, st, frame)
             elif v == S.SCHEDULE:
                 view_schedule(cv, top, bottom, cols, st, frame)
             elif v == S.GROUPS:
-                view_groups(cv, top, bottom, cols, st, frame)
+                view_groups(body, st, frame)
             elif v == S.BRACKET:
                 view_bracket(cv, top, bottom, cols, st, frame)
             elif v == S.SCORERS:
-                view_scorers(cv, top, bottom, cols, st, frame)
+                view_scorers(body, st, frame)
             elif v == S.DETAIL:
                 view_detail(cv, top, bottom, cols, st, frame)
             elif v == S.TEAM:
                 view_team(cv, top, bottom, cols, st, frame)
             elif v == S.HELP:
-                view_help(cv, top, bottom, cols, st, frame)
+                view_help(body, st, frame)
         if st.command_mode:
             draw_command_palette(root, st)
         draw_statusline(root.rows(-2, -1), st)
