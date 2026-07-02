@@ -350,8 +350,8 @@ class RawTerminal:
         tty.setcbreak(self.fd)
         enter_alt_screen()
         if self.mouse:
-            sys.stdout.write(f"{CSI}?1000;1002;1006h")
-            sys.stdout.flush()
+            self.mouse = False
+            self.set_mouse(True)
         try:
             signal.signal(signal.SIGWINCH, self._on_resize)
         except (ValueError, OSError):
@@ -360,14 +360,27 @@ class RawTerminal:
 
     def __exit__(self, *exc):
         try:
-            if self.mouse:
-                sys.stdout.write(f"{CSI}?1006;1002;1000l")
-                sys.stdout.flush()
+            self.set_mouse(False)
             exit_alt_screen()
         finally:
             if self.old is not None:
                 termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old)
         return False
+
+    def set_mouse(self, on):
+        """Enable/disable SGR mouse reporting at runtime (no-op if unchanged).
+
+        Turning it off restores the terminal's native text selection.
+        """
+        on = bool(on)
+        if on == self.mouse:
+            return
+        self.mouse = on
+        if on:
+            sys.stdout.write(f"{CSI}?1000;1002;1006h")
+        else:
+            sys.stdout.write(f"{CSI}?1006;1002;1000l")
+        sys.stdout.flush()
 
     def _on_resize(self, *_):
         self._resized = True

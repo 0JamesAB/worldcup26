@@ -190,3 +190,37 @@ class TestMouseDecode(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSetMouse(unittest.TestCase):
+    """set_mouse writes mode sequences and tracks state (no tty entry needed)."""
+
+    def _tw(self):
+        tw = term.RawTerminal.__new__(term.RawTerminal)
+        tw.mouse = False
+        return tw
+
+    def _capture(self, fn):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            fn()
+        return buf.getvalue()
+
+    def test_enable_disable_sequences(self):
+        tw = self._tw()
+        out = self._capture(lambda: tw.set_mouse(True))
+        self.assertIn("\x1b[?1000;1002;1006h", out)
+        self.assertTrue(tw.mouse)
+        out = self._capture(lambda: tw.set_mouse(False))
+        self.assertIn("\x1b[?1006;1002;1000l", out)
+        self.assertFalse(tw.mouse)
+
+    def test_noop_when_unchanged(self):
+        tw = self._tw()
+        self.assertEqual(self._capture(lambda: tw.set_mouse(False)), "")
+        self._capture(lambda: tw.set_mouse(True))
+        self.assertEqual(self._capture(lambda: tw.set_mouse(True)), "")
+
+
+if __name__ == "__main__":
+    unittest.main()

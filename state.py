@@ -51,6 +51,7 @@ class AppState:
     def __init__(self):
         self.lock = threading.RLock()
         self.hits = HitMap()   # clickable regions, rebuilt every rendered frame
+        self.mouse_enabled = True
         self.view = LIVE
         self.prev_view = LIVE
         self.running = True
@@ -174,6 +175,8 @@ COMMANDS = [
      "syntax": "match <id>", "desc": "open a match by event id"},
     {"name": "refresh", "aliases": ["r", "reload"], "args": None,
      "syntax": "refresh", "desc": "force a refresh now"},
+    {"name": "mouse", "aliases": [], "args": "onoff",
+     "syntax": "mouse [on|off]", "desc": "toggle mouse capture (off = native text selection)"},
     {"name": "help", "aliases": ["h"], "args": None,
      "syntax": "help", "desc": "keys & commands"},
     {"name": "quit", "aliases": ["q", "exit"], "args": None,
@@ -260,6 +263,13 @@ def command_completions(st, buf):
                 out.append({"text": f"{name} {m.id}", "label": m.id,
                             "hint": lbl, "kind": "arg"})
         return ("Today's match ids", out[:9])
+
+    if cmd["args"] == "onoff":
+        out = [{"text": f"{name} {v}", "label": v, "hint": h, "kind": "arg"}
+               for v, h in (("on", "capture clicks & wheel"),
+                            ("off", "native text selection"))
+               if al == "" or v.startswith(al)]
+        return ("Mouse", out)
 
     return (cmd["syntax"], [{"text": buf, "label": ":" + cmd["syntax"],
                             "hint": cmd["desc"], "kind": "info"}])
@@ -351,6 +361,14 @@ def run_command(state, raw, refresher):
         state.detail_tab = 0
         refresher.request_summary(args[0])
         return f"match {args[0]}"
+    if cmd == "mouse":
+        if arg.lower() in ("on", "off"):
+            state.mouse_enabled = arg.lower() == "on"
+        elif not arg:
+            state.mouse_enabled = not state.mouse_enabled
+        else:
+            return "usage: :mouse [on|off]"
+        return "mouse " + ("on" if state.mouse_enabled else "off — native text selection restored")
     if cmd in ("refresh", "r", "reload"):
         refresher.force_all()
         return "refreshing…"

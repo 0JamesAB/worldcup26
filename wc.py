@@ -285,7 +285,7 @@ def parse_args(argv):
             "help": False, "list_teams": False}
     i = 0
     name_to_view = {"live": S.LIVE, "schedule": S.SCHEDULE, "groups": S.GROUPS,
-                    "bracket": S.BRACKET, "scorers": S.SCORERS}
+                    "bracket": S.BRACKET, "scorers": S.SCORERS, "help": S.HELP}
     while i < len(argv):
         a = argv[i]
         al = a.lower()
@@ -411,10 +411,12 @@ def main():
                 if tw.take_resize():
                     renderer.reset()
                     st.dirty = True
+                if tw.mouse != st.mouse_enabled:   # :mouse on|off
+                    tw.set_mouse(st.mouse_enabled)
                 key = read_key(timeout=0.12)
                 if key is not None:
                     if isinstance(key, term.MouseEvent):
-                        if not st.command_mode:
+                        if not st.command_mode and st.mouse_enabled:
                             handle_mouse(st, key, refresher)
                     elif st.command_mode:
                         handle_command_key(st, key, refresher)
