@@ -205,14 +205,14 @@ def draw_odds_panel(cv, top, bottom, cols, m, od):
 # chrome
 # ----------------------------------------------------------------------------
 
-def draw_header(cv, cols, st, frame):
-    cv.fill_rect(0, 0, 1, cols, bg(*P.bg1))
+def draw_header(bar, st, frame):
+    bar.fill(bg(*P.bg1))
     # brand
-    x = widgets.gradient_put(cv, 0, 2, "⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
-                     extra=bg(*P.bg1) + BOLD)
-    cv.put(0, x + 1, "2026", bg(*P.bg1) + fg(*P.gold) + BOLD)
+    x = bar.gradient("⚽ FIFA WORLD CUP", (90, 210, 140), (120, 180, 255),
+                     c=2, extra=bg(*P.bg1) + BOLD)
+    bar.put(0, x + 1, "2026", bg(*P.bg1) + fg(*P.gold) + BOLD)
     # host
-    cv.put(0, x + 6, "· USA · CAN · MEX", bg(*P.bg1) + fg(*P.faint))
+    bar.put(0, x + 6, "· USA · CAN · MEX", bg(*P.bg1) + fg(*P.faint))
 
     # live indicator + clock (right)
     live_n = sum(1 for m in st.matches_today if m.is_live)
@@ -222,45 +222,42 @@ def draw_header(cv, cols, st, frame):
         pulse = (frame // 3) % 2 == 0
         dot = "●" if pulse else "◍"
         chip = f"{dot} {live_n} LIVE "
-        rx = cols - term.display_width(right) - term.display_width(chip) - 1
-        cv.put(0, rx, chip, bg(*P.red if pulse else (150, 60, 60)) + fg(*P.white) + BOLD)
+        rx = bar.w - term.display_width(right) - term.display_width(chip) - 1
+        bar.put(0, rx, chip, bg(*P.red if pulse else (150, 60, 60)) + fg(*P.white) + BOLD)
     else:
         chip = "○ no live "
-        rx = cols - term.display_width(right) - term.display_width(chip) - 1
-        cv.put(0, rx, chip, bg(*P.bg1) + fg(*P.faint))
-    cv.put(0, cols - term.display_width(right) - 1, right, bg(*P.bg1) + fg(*P.dim))
+        rx = bar.w - term.display_width(right) - term.display_width(chip) - 1
+        bar.put(0, rx, chip, bg(*P.bg1) + fg(*P.faint))
+    bar.right(right, bg(*P.bg1) + fg(*P.dim), pad=1)
 
 
-def draw_tabs(cv, cols, st):
+def draw_tabs(bar, st):
     active = S.TAB_VIEWS.index(st.view) if st.view in S.TAB_VIEWS else -1
-    extents = widgets.tab_bar(cv, 1, 0, cols, S.TABS, active,
-                              hint="  :help  ·  q quit")
+    extents = bar.tab_bar(S.TABS, active, hint="  :help  ·  q quit")
     for i, (x, w) in enumerate(extents):
-        st.hits.add(1, x, 1, w, ("view", S.TAB_VIEWS[i]))
+        bar.hit(("view", S.TAB_VIEWS[i]), 0, x, 1, w)
 
 
-def draw_context(cv, cols, st, label):
-    cv.fill_rect(2, 0, 1, cols, bg(*P.bg0))
-    cv.put(2, 2, label, fg(*P.dim) + ITALIC)
-    cv.hline(2, 0, 0)  # noop
+def draw_context(bar, st, label):
+    bar.fill(bg(*P.bg0))
+    bar.put(0, 2, label, fg(*P.dim) + ITALIC)
 
 
-def draw_statusline(cv, cols, rows, st):
-    r = rows - 2
-    cv.fill_rect(r, 0, 1, cols, bg(*P.bg1))
+def draw_statusline(bar, st):
+    bar.fill(bg(*P.bg1))
     if st.command_mode:
         prompt = ":" + st.command_buf
-        cv.put(r, 1, prompt, bg(*P.bg1) + fg(*P.white) + BOLD)
+        bar.put(0, 1, prompt, bg(*P.bg1) + fg(*P.white) + BOLD)
         x = 1 + term.display_width(prompt)
-        cv.put(r, x, "█", bg(*P.bg1) + fg(*P.accent))
+        bar.put(0, x, "█", bg(*P.bg1) + fg(*P.accent))
         # inline ghost completion of the highlighted suggestion
         _, sugg = S.command_completions(st, st.command_buf)
         if sugg:
             t = sugg[min(st.command_sel, len(sugg) - 1)]["text"]
             if t.startswith(st.command_buf) and len(t) > len(st.command_buf):
                 ghost = t[len(st.command_buf):]
-                cv.put(r, x + 1, term.strip_ansi(ghost), bg(*P.bg1) + fg(*P.faint))
-                cv.put(r, x + 1 + term.display_width(ghost), "  ⇥ tab", bg(*P.bg1) + fg(*P.faint))
+                bar.put(0, x + 1, term.strip_ansi(ghost), bg(*P.bg1) + fg(*P.faint))
+                bar.put(0, x + 1 + term.display_width(ghost), "  ⇥ tab", bg(*P.bg1) + fg(*P.faint))
         return
     # latest live toast
     alive = [t for t in st.toasts if t.alive]
@@ -275,23 +272,22 @@ def draw_statusline(cv, cols, rows, st):
         flash = (t.age < 1.2 and int(t.age * 5) % 2 == 0)
         if flash:
             stl = bg(*P.gold) + fg(*P.bg0) + BOLD
-        cv.put(r, 1, " " + t.text + " ", stl)
+        bar.put(0, 1, " " + t.text + " ", stl)
     else:
-        cv.put(r, 1, st.status, bg(*P.bg1) + fg(*P.faint))
+        bar.put(0, 1, st.status, bg(*P.bg1) + fg(*P.faint))
     # net status right
     err = espn.last_error[0]
     if err:
-        msg = "⚠ reconnecting"
-        cv.put(r, cols - term.display_width(msg) - 1, msg, bg(*P.bg1) + fg(*P.yellow))
+        bar.right("⚠ reconnecting", bg(*P.bg1) + fg(*P.yellow), pad=1)
 
 
-def draw_command_palette(cv, cols, rows, st):
+def draw_command_palette(root, st):
     """Floating command/argument suggestion menu above the ':' prompt."""
     title, sugg = S.command_completions(st, st.command_buf)
     if not sugg:
         return
     st.command_sel = max(0, min(st.command_sel, len(sugg) - 1))
-    status_row = rows - 2
+    status_row = root.h - 2
     top_limit = 3  # don't cover header / tabs / context strip
     maxshow = max(1, min(len(sugg), status_row - top_limit - 1, 10))
     # keep the highlighted row within the visible window
@@ -302,32 +298,32 @@ def draw_command_palette(cv, cols, rows, st):
 
     def rw(s):
         return term.display_width(s["label"]) + term.display_width(s["hint"]) + 8
-    w = min(cols - 4, max(48, term.display_width(title) + 8, max(rw(s) for s in shown)))
+    w = min(root.w - 4, max(48, term.display_width(title) + 8, max(rw(s) for s in shown)))
     h = len(shown) + 2
     y0 = status_row - h
     x0 = 1
-    cv.box(y0, x0, h, w, style=fg(*P.accent2), chars=LIGHT, title=title,
-           title_style=fg(*P.gold) + BOLD, fillstyle=bg(*P.bg2))
+    root.box(y0, x0, h, w, style=fg(*P.accent2), chars=LIGHT, title=title,
+             title_style=fg(*P.gold) + BOLD, fillstyle=bg(*P.bg2))
     if len(sugg) > len(shown):
         more = f"{st.command_sel + 1}/{len(sugg)}"
-        cv.put(y0, x0 + w - term.display_width(more) - 2, more, bg(*P.bg2) + fg(*P.faint))
+        root.put(y0, x0 + w - term.display_width(more) - 2, more, bg(*P.bg2) + fg(*P.faint))
     for i, s in enumerate(shown):
         rr = y0 + 1 + i
         sel = (win_start + i) == st.command_sel
         if sel:
-            cv.fill_rect(rr, x0 + 1, 1, w - 2, bg(*P.accent2))
-            cv.put(rr, x0 + 1, " ▸ ", bg(*P.accent2) + fg(*P.bg0) + BOLD)
+            root.fill_rect(rr, x0 + 1, 1, w - 2, bg(*P.accent2))
+            root.put(rr, x0 + 1, " ▸ ", bg(*P.accent2) + fg(*P.bg0) + BOLD)
             lblst = bg(*P.accent2) + fg(*P.bg0) + BOLD
             hintst = bg(*P.accent2) + fg(*P.bg0)
         else:
             lblst = bg(*P.bg2) + fg(*P.text)
             hintst = bg(*P.bg2) + fg(*P.dim)
-        cv.put(rr, x0 + 4, term.strip_ansi(term.truncate(s["label"], w - 10)), lblst)
+        root.put(rr, x0 + 4, term.strip_ansi(term.truncate(s["label"], w - 10)), lblst)
         hint = s.get("hint", "")
         if hint:
             hx = x0 + w - term.display_width(hint) - 2
             if hx > x0 + 4 + term.display_width(s["label"]) + 1:
-                cv.put(rr, hx, term.strip_ansi(hint), hintst)
+                root.put(rr, hx, term.strip_ansi(hint), hintst)
 
 
 def footer_right(st):
@@ -349,11 +345,10 @@ def footer_right(st):
     return ""
 
 
-def draw_footer(cv, cols, rows, st):
-    r = rows - 1
+def draw_footer(bar, st):
     if st.command_mode:
         hints = [("⇥", "complete"), ("↑↓", "select"), ("↵", "run"), ("esc", "cancel")]
-        widgets.footer(cv, r, 0, cols, hints, right="")
+        widgets.footer(bar, 0, 0, bar.w, hints, right="")
         return
     common = [("↑↓", "move"), ("↵", "open"), ("⇥", "view"), (":", "command"), ("r", "refresh")]
     if st.view == S.SCHEDULE:
@@ -368,7 +363,7 @@ def draw_footer(cv, cols, rows, st):
         hints = [("esc", "back"), ("⇥", "view"), (":", "command"), ("q", "quit")]
     else:
         hints = common
-    widgets.footer(cv, r, 0, cols, hints, right=footer_right(st))
+    widgets.footer(bar, 0, 0, bar.w, hints, right=footer_right(st))
 
 
 # ----------------------------------------------------------------------------
@@ -1278,9 +1273,10 @@ def render(state, cols, rows):
         st.frame += 1
         frame = st.frame
         st.hits.clear()   # clickable regions track exactly this frame
-        draw_header(cv, cols, st, frame)
-        draw_tabs(cv, cols, st)
-        draw_context(cv, cols, st, context_label(st))
+        root = cv.region(hits=st.hits)
+        draw_header(root.rows(0, 1), st, frame)
+        draw_tabs(root.rows(1, 2), st)
+        draw_context(root.rows(2, 3), st, context_label(st))
         top = 3
         bottom = rows - 3
         if bottom - top < 3:
@@ -1304,7 +1300,7 @@ def render(state, cols, rows):
             elif v == S.HELP:
                 view_help(cv, top, bottom, cols, st, frame)
         if st.command_mode:
-            draw_command_palette(cv, cols, rows, st)
-        draw_statusline(cv, cols, rows, st)
-        draw_footer(cv, cols, rows, st)
+            draw_command_palette(root, st)
+        draw_statusline(root.rows(-2, -1), st)
+        draw_footer(root.rows(-1), st)
     return cv.to_lines()
