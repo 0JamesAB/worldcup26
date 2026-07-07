@@ -5,7 +5,7 @@ a styled cell-grid Canvas, raw keyboard input with escape decoding, and
 a diff-based frame renderer. Pure stdlib.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .term import (fg, bg, fg_hex, bg_hex, hex_rgb, style,
                    RESET, BOLD, DIM, ITALIC, UNDERLINE, BLINK, REVERSE,
@@ -21,7 +21,7 @@ from .theme import Theme, get_theme, set_theme, presets
 from .layout import Rect, Fixed, Flex, hsplit, vsplit
 from .interact import ListState, ScrollState, HitMap, LineEdit
 from .styles import Style
-from .app import run
+from .app import run, App, Toast, Toasts
 # `tui.style` stays the v0.1.0 term.style() helper function; the Style
 # class lives in the `styles` module to keep the two names distinct.
-from . import widgets, layout, interact, styles, testing
+from . import widgets, layout, interact, styles, testing, commands
