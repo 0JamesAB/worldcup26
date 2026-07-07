@@ -189,11 +189,22 @@ class Canvas:
                 src = srow[x]
                 ch = src.ch
                 cont = src.cont
-                if cont and x == xa:
-                    ch = " "  # orphan continuation at the window's left edge
-                    cont = False
-                elif not cont and x + 1 >= xb and x + 1 < other.w and srow[x + 1].cont:
-                    ch = " "  # wide lead whose continuation is cut off
+                if cont:
+                    if x == xa or tx == x0:
+                        # orphan continuation: its lead fell outside the
+                        # source window or the destination clip
+                        ch = " "
+                        cont = False
+                elif ch and term.char_width(ch) == 2:
+                    # will the continuation cell actually be written?
+                    will_cont = (x + 1 < xb and srow[x + 1].cont
+                                 and tx + 1 < x1)
+                    if not will_cont and (tx + 1 < x1 or x1 < self.w):
+                        # continuation lost at an interior edge (dest clip,
+                        # source window, or a legacy source-edge lead):
+                        # repair to a space. At the destination canvas edge
+                        # keep the legacy lead-only write, matching put().
+                        ch = " "
                 dst = drow[tx]
                 dst.ch = ch
                 dst.style = src.style

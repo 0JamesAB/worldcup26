@@ -439,12 +439,13 @@ def draw_match_card(card, m, selected, frame):
         if m.is_pre:
             sc = ""
         inner.put(i, 22, term.pad(sc, 7, "right"), sstyle2)
-        # scorers
-        gtxt = team_goals_text(m, comp, inner.w - 31)
+        # scorers — drawn through `card` (not `inner`) so the text may end
+        # in the fill-padding column at card.w-2, exactly as pre-Region
+        gtxt = team_goals_text(m, comp, card.w - 34)
         if gtxt:
-            inner.put(i, 31, gtxt, fillstyle + fg(*P.faint))
+            card.put(i + 1, 33, gtxt, fillstyle + fg(*P.faint))
         elif m.is_pre and comp.form:
-            inner.put(i, 31, "form " + comp.form, fillstyle + fg(*P.faint))
+            card.put(i + 1, 33, "form " + comp.form, fillstyle + fg(*P.faint))
 
     if show_odds:
         draw_odds_bars(inner, 2, m, fillstyle)

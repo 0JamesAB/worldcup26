@@ -310,3 +310,53 @@ class TestRegionFactory(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBlitClipEdgeTears(unittest.TestCase):
+    """Regression: wide-glyph tear repair at DESTINATION clip edges
+    (review finding: blit previously repaired only source-window edges)."""
+
+    def _row_width(self, cv, r=0):
+        import re
+        from tui import term
+        line = re.sub(r"\x1b\[[0-9;]*m", "", cv.to_lines()[r])
+        return sum(term.char_width(ch) for ch in line)
+
+    def test_right_clip_edge_drops_glyph(self):
+        # clip x1=3 interior; wide lead would land at col 2 with cont clipped
+        src = Canvas(6, 1)
+        src.put(0, 0, "ａｂｃ")
+        dst = Canvas(10, 1)
+        dst.region(0, 0, 1, 3).region(0, 0, 1, 6).blit(src)
+        self.assertEqual(self._row_width(dst), 10)   # was 11 pre-fix
+        self.assertEqual(dst.grid[0][2].ch, " ")     # repaired, not torn
+
+    def test_left_clip_edge_orphan_cont(self):
+        # window starts left of the clip: cont cell lands at x0 leadless
+        src = Canvas(6, 1)
+        src.put(0, 0, "ａｂｃ")
+        dst = Canvas(10, 1)
+        # region cols [1,6); blit window from src col 0: lead at dest 0 is
+        # clipped, its cont would land at dest col 1 (x0) as an orphan
+        dst.region(0, 1, 1, 5).blit(src, c=-1)
+        self.assertEqual(self._row_width(dst), 10)   # was 9 pre-fix
+        self.assertFalse(dst.grid[0][1].cont)
+
+    def test_source_legacy_edge_lead_repaired(self):
+        # source's last column holds a legacy lead-only wide glyph; copying
+        # it into an interior dest column must repair it to a space
+        src = Canvas(3, 1)
+        src.put(0, 2, "ａ")            # lead-only at src canvas edge
+        dst = Canvas(10, 1)
+        dst.blit(src, 0, 0)
+        self.assertEqual(dst.grid[0][2].ch, " ")
+        self.assertEqual(self._row_width(dst), 10)
+
+    def test_dest_canvas_edge_keeps_legacy_lead(self):
+        # at the destination CANVAS edge the legacy lead-only write is kept,
+        # byte-matching Canvas.put's behavior there
+        src = Canvas(2, 1)
+        src.put(0, 0, "ａ")
+        dst = Canvas(3, 1)
+        dst.blit(src, 0, 2)            # lead lands in dst's last column
+        self.assertEqual(dst.grid[0][2].ch, "ａ")

@@ -271,7 +271,7 @@ class Region:
         if y1 > y0 and x1 > x0:
             self.hits.add(y0, x0, y1 - y0, x1 - x0, action)
 
-    def blit(self, src, src_r=0, src_c=0, r=0, c=0):
+    def blit(self, src, r=0, c=0, *, src_r=0, src_c=0):
         """Blit a window of Canvas `src` (from source offset (src_r, src_c))
         at local (r, c). The window covers the rest of this region from
         (r, c) — i.e. h-r rows by w-c cols. The Canvas blit repairs
