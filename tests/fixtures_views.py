@@ -14,6 +14,14 @@ Determinism contract (freeze_environment):
   - theme installed exactly as wc.py does: set_theme(WorldCupTheme)
   - espn.last_error cleared (statusline "reconnecting" chip)
   - every state carries a live match so footer_right never calls now()
+    (state_live_empty is the exception: with no fixtures at all, footer_right
+    computes now() but its value never reaches the frame)
+  - toast ages are wall-clock-derived, so fixtures pin them: born=0.0 keeps a
+    toast out of the flash window forever; _FrozenToast pins age exactly for
+    the flash-window golden
+  - state_detail_odds_decimal sets WCUP_ODDS_FORMAT=decimal (read at render
+    time); every fixture's freeze_environment pops it again, and the golden
+    test module restores the caller's original value on teardown
   - st.frame set to FRAME; render() increments it, so tests must re-set
     st.frame = FRAME before each render call
 """
@@ -233,6 +241,63 @@ def state_live_palette():
     return st
 
 
+def state_live_empty():
+    """No fixtures today: '○ no live' header chip, empty-state message,
+    and a footer with neither a live score nor a next-kickoff countdown."""
+    st = _base_state(S.LIVE)
+    st.matches_today = []
+    st.match_index.clear()
+    st.today_label = ""
+    return st
+
+
+class _FrozenToast(S.Toast):
+    """A Toast whose age is pinned, so the statusline flash window
+    (age < 1.2, int(age * 5) even) renders byte-stably."""
+
+    def __init__(self, text, kind, age):
+        S.Toast.__init__(self, text, kind, ttl=1e12)
+        self.frozen_age = age
+
+    @property
+    def age(self):
+        return self.frozen_age
+
+    @property
+    def alive(self):
+        return True
+
+
+def _toast_state(text, kind, age):
+    st = _base_state(S.LIVE)
+    st.toasts = [_FrozenToast(text, kind, age)]
+    return st
+
+
+def state_live_toast_flash():
+    """Goal toast inside the flash window: age 0.1 -> int(0.5) == 0 (even),
+    so the gold-on-dark flash style is active."""
+    return _toast_state("⚽ GOAL!  ARG 1 - 2 BRA", "goal", 0.1)
+
+
+def state_live_toast_error():
+    """Error-kind toast (red statusline text), past the flash window."""
+    return _toast_state("fetch failed: HTTP 503 — retrying", "error", 3.0)
+
+
+def state_live_toast_info():
+    """Info-kind toast (accent statusline text), past the flash window."""
+    return _toast_state("KICK-OFF  GER v ESP", "info", 3.0)
+
+
+def state_live_reconnecting():
+    """espn.last_error set: the statusline shows the '⚠ reconnecting' chip
+    on the right while the plain status text stays on the left."""
+    st = _base_state(S.LIVE)
+    espn.last_error[0] = "timed out"
+    return st
+
+
 # ----------------------------------------------------------------------------
 # schedule
 # ----------------------------------------------------------------------------
@@ -266,6 +331,17 @@ def state_schedule():
     return st
 
 
+def state_schedule_loading():
+    """Mid-fetch: the 'loading…' chip on the date-nav row, no round label,
+    and the empty-date message below the rule."""
+    st = _base_state(S.SCHEDULE)
+    st.schedule_date = "20260617"
+    st.schedule_label = ""
+    st.schedule_matches = []
+    st.loading = {"schedule"}
+    return st
+
+
 # ----------------------------------------------------------------------------
 # groups
 # ----------------------------------------------------------------------------
@@ -286,23 +362,45 @@ def _entry_raw(team_i, rank, gp, w, d, l, gf, ga, note=None):
     return entry
 
 
+_G_FREEZE = [("#4ade80", "advance"), ("#4ade80", "advance"),
+             ("#f0c458", "best third"), None]
+_G_PLAIN = [None, None, None, None]
+_G_STATS = [(3, 3, 0, 0, 7, 1), (3, 1, 2, 0, 4, 2),
+            (3, 1, 1, 1, 3, 4), (3, 0, 1, 2, 1, 8)]
+
+
+def _group(letter, base, notes):
+    entries = [_entry_raw((base + k) % len(TEAMS), k + 1, *_G_STATS[k],
+                          note=notes[k])
+               for k in range(4)]
+    return espn.Group({"name": "Group " + letter,
+                       "standings": {"entries": entries}})
+
+
 def state_groups():
-    freeze = [("#4ade80", "advance"), ("#4ade80", "advance"),
-              ("#f0c458", "best third"), None]
-    plain = [None, None, None, None]
-    stats = [(3, 3, 0, 0, 7, 1), (3, 1, 2, 0, 4, 2),
-             (3, 1, 1, 1, 3, 4), (3, 0, 1, 2, 1, 8)]
-
-    def group(letter, base, notes):
-        entries = [_entry_raw(base + k, k + 1, *stats[k], note=notes[k])
-                   for k in range(4)]
-        return espn.Group({"name": "Group " + letter,
-                           "standings": {"entries": entries}})
-
     st = _base_state(S.GROUPS)
-    st.standings = [group("A", 0, freeze), group("B", 4, freeze),
-                    group("C", 8, plain), group("D", 12, freeze)]
+    st.standings = [_group("A", 0, _G_FREEZE), _group("B", 4, _G_FREEZE),
+                    _group("C", 8, _G_PLAIN), _group("D", 12, _G_FREEZE)]
     st.groups_scroll = 0
+    return st
+
+
+def state_groups_loading():
+    """No standings fetched yet: the centered loading message."""
+    st = _base_state(S.GROUPS)
+    st.standings = []
+    return st
+
+
+def state_groups_scrolled():
+    """All 12 groups (A-L; the 32-team list wraps) with groups_scroll=1:
+    exercises the scroll window and the ↑↓ page indicator at both column
+    counts (two columns at 120x40, one at 80x24)."""
+    st = _base_state(S.GROUPS)
+    notes = [_G_FREEZE, _G_FREEZE, _G_PLAIN, _G_FREEZE]
+    st.standings = [_group(chr(ord("A") + g), 4 * g, notes[g % 4])
+                    for g in range(12)]
+    st.groups_scroll = 1
     return st
 
 
@@ -402,6 +500,34 @@ def state_bracket_scrolled():
     return st
 
 
+def state_bracket_loading():
+    """No knockout data at all: the centered loading message."""
+    st = _base_state(S.BRACKET)
+    st.bracket = {}
+    return st
+
+
+def state_bracket_empty():
+    """Skeleton knockout: rounds 32/16/QF/SF empty, so widgets.draw_bracket
+    sizes the canvas from fallback_leaves; the final is a placeholder pairing
+    and the 3rd-place slot holds None, exercising draw_bracket_cell's empty
+    "—" branch. bracket_scroll_x overshoots and clamps to the right edge so
+    the final column is in view at both sizes."""
+    st = _base_state(S.BRACKET)
+    rounds = {slug: [] for slug, _, _ in espn.KNOCKOUT_ROUNDS}
+    final = espn.Match(_match_raw(
+        "8501", "2026-07-19T19:00Z", "final",
+        _placeholder_raw("Semifinal 2 Winner", "home"),
+        _placeholder_raw("Semifinal 1 Winner", "away"),
+        "pre", "STATUS_SCHEDULED", venue="MetLife Stadium"))
+    rounds["final"].append(final)
+    rounds["3rd-place-match"].append(None)
+    st.bracket = rounds
+    st.match_index[final.id] = final
+    st.bracket_scroll_x = 999
+    return st
+
+
 # ----------------------------------------------------------------------------
 # scorers
 # ----------------------------------------------------------------------------
@@ -441,6 +567,14 @@ def state_scorers_goals():
 
 def state_scorers_assists():
     return _scorers_state(1, 3)
+
+
+def state_scorers_loading():
+    """Leaderboards not fetched yet: tab chips over the loading message."""
+    st = _base_state(S.SCORERS)
+    st.scorers = {"goals": [], "assists": []}
+    st.loading = {"scorers"}
+    return st
 
 
 # ----------------------------------------------------------------------------
@@ -577,6 +711,108 @@ def state_detail_odds():
     return st
 
 
+def state_detail_odds_decimal():
+    """fmt_price's decimal branch: WCUP_ODDS_FORMAT=decimal is read at render
+    time. freeze_environment (run by every fixture build) pops the variable
+    again, so it never leaks into another fixture's frame."""
+    st = state_detail_odds()
+    os.environ["WCUP_ODDS_FORMAT"] = "decimal"
+    return st
+
+
+def state_detail_loading_unknown():
+    """Unknown event id: no Match and no summary, so draw_detail_header takes
+    its m=None branch above the loading-body message."""
+    st = _base_state(S.DETAIL)
+    st.detail_event_id = "424242"
+    st.detail_tab = 0
+    st.loading = {"summary"}
+    return st
+
+
+def _detail_empty_state(tab):
+    """Match centre for a live match whose summary fetch returned nothing:
+    every tab falls back (lineups unavailable / no key events / no stats)."""
+    st = _base_state(S.DETAIL)
+    st.detail_event_id = "9002"   # today's goalless HT match; carries no odds
+    st.detail_tab = tab
+    st.summaries["9002"] = espn.MatchDetail(
+        {"gameInfo": {"venue": {"fullName": "Lumen Field"}}})
+    return st
+
+
+def state_detail_empty_lineups():
+    return _detail_empty_state(0)
+
+
+def state_detail_empty_timeline():
+    return _detail_empty_state(1)
+
+
+def state_detail_empty_stats():
+    return _detail_empty_state(2)
+
+
+# 10 starters (declared 4-3-3 sums to 11), one of every position letter the
+# bucket fallback distinguishes: G / D,B / M,other / F,S,W.
+_ENG_X10 = [
+    ("1", "Pickford", "G"),
+    ("2", "Walker", "D"), ("5", "Stones", "D"), ("3", "Shaw", "B"),
+    ("4", "Rice", "M"), ("10", "Bellingham", "M"), ("8", "Foden", "AM"),
+    ("7", "Saka", "W"), ("9", "Kane", "S"), ("11", "Rashford", "F"),
+]
+
+
+def state_detail_lineups_fallback():
+    """formation_lines position-bucket fallback: the home XI has 10 starters,
+    so the declared formation doesn't sum and players regroup by position
+    letter into a 1-3-3-3 shape. The away side keeps the clean-chunks path."""
+    st = _base_state(S.DETAIL)
+    m = _detail_match()
+    st.match_index[m.id] = m
+    st.detail_event_id = m.id
+    st.detail_tab = 0
+    st.summaries[m.id] = espn.MatchDetail({
+        "rosters": [_lineup_raw(3, "home", "4-3-3", _ENG_X10,
+                                [("12", "Henderson", "M")]),
+                    _lineup_raw(2, "away", "4-4-2", _FRA_XI,
+                                [("13", "Fofana", "M")])],
+        "gameInfo": {"venue": {"fullName": "SoFi Stadium"}},
+    })
+    return st
+
+
+def state_detail_timeline_scrolled():
+    """A long timeline (32 events) with detail_scroll=4: the window starts
+    mid-list at both sizes (the clamp allows exactly 4 at 120x40). The
+    'Penalty - Missed' events also exercise event_icon's bullet fallback."""
+    st = _base_state(S.DETAIL)
+    m = _detail_match()
+    st.match_index[m.id] = m
+    st.detail_event_id = m.id
+    st.detail_tab = 1
+    st.detail_scroll = 4
+    kinds = ["Goal", "Yellow Card", "Substitution", "Penalty - Missed",
+             "Red Card"]
+    events = []
+    for k in range(32):
+        t = kinds[k % len(kinds)]
+        team_i = (3, 2)[k % 2]
+        minute = "%d'" % (1 + (89 * k) // 31)
+        if t == "Substitution":
+            players = ["On %d" % k, "Off %d" % k]
+        else:
+            players = ["Player %d" % k]
+        events.append(_event_raw(t, minute, team_i, players,
+                                 scoring=(t == "Goal"),
+                                 period=1 if k < 16 else 2))
+    st.summaries[m.id] = espn.MatchDetail({
+        "keyEvents": events,
+        "gameInfo": {"venue": {"fullName": "SoFi Stadium"}},
+    })
+    return st
+
+
 # ----------------------------------------------------------------------------
 # team / help
 # ----------------------------------------------------------------------------
@@ -624,6 +860,17 @@ def state_team():
     ]
     for m in st.team_matches:
         st.match_index[m.id] = m
+    return st
+
+
+def state_team_loading():
+    """Team header with no fixtures yet: a P0 0W 0D 0L 0-0 record line,
+    no next-match chip, and the centered loading message."""
+    st = _base_state(S.TEAM)
+    st.team_query = "Japan"
+    st.team_abbr = "JPN"
+    st.team_matches = []
+    st.loading = {"team"}
     return st
 
 

@@ -50,6 +50,35 @@ FIXTURES = [
     ("help", F.state_help),
 ]
 
+# Phase W: empty / loading / edge states found golden-blind by the Phase R
+# fidelity review. Captured at 120x40 only, except where the 80x24 layout
+# differs meaningfully (noted per fixture) — those carry both sizes.
+BOTH = SIZES
+ONE = [(120, 40)]
+EDGE_FIXTURES = [
+    ("live_empty", F.state_live_empty, ONE),
+    ("live_toast_flash", F.state_live_toast_flash, ONE),
+    ("live_toast_error", F.state_live_toast_error, ONE),
+    ("live_toast_info", F.state_live_toast_info, ONE),
+    ("live_reconnecting", F.state_live_reconnecting, ONE),
+    ("schedule_loading", F.state_schedule_loading, ONE),
+    ("groups_loading", F.state_groups_loading, ONE),
+    ("groups_scrolled", F.state_groups_scrolled, BOTH),    # 2 cols vs 1 col
+    ("bracket_loading", F.state_bracket_loading, ONE),
+    ("bracket_empty", F.state_bracket_empty, BOTH),        # viewport clip differs
+    ("scorers_loading", F.state_scorers_loading, ONE),
+    ("detail_loading_unknown", F.state_detail_loading_unknown, ONE),
+    ("detail_empty_lineups", F.state_detail_empty_lineups, ONE),
+    ("detail_empty_timeline", F.state_detail_empty_timeline, ONE),
+    ("detail_empty_stats", F.state_detail_empty_stats, ONE),
+    ("detail_lineups_fallback", F.state_detail_lineups_fallback, BOTH),  # pitch geometry
+    ("detail_timeline_scrolled", F.state_detail_timeline_scrolled, BOTH),  # window size
+    ("detail_odds_decimal", F.state_detail_odds_decimal, ONE),
+    ("team_loading", F.state_team_loading, ONE),
+]
+
+ALL_FIXTURES = [(n, b, SIZES) for n, b in FIXTURES] + EDGE_FIXTURES
+
 _saved = {}
 
 
@@ -57,6 +86,7 @@ def setUpModule():
     _saved["depth"] = term.get_color_depth()
     _saved["theme"] = tui_theme.get_theme()
     _saved["tz"] = os.environ.get("TZ")
+    _saved["odds_fmt"] = os.environ.get("WCUP_ODDS_FORMAT")
 
 
 def tearDownModule():
@@ -67,6 +97,10 @@ def tearDownModule():
     else:
         os.environ["TZ"] = _saved["tz"]
     time.tzset()
+    if _saved["odds_fmt"] is None:
+        os.environ.pop("WCUP_ODDS_FORMAT", None)
+    else:
+        os.environ["WCUP_ODDS_FORMAT"] = _saved["odds_fmt"]
 
 
 def render_frame(build, cols, rows):
@@ -83,8 +117,8 @@ def golden_path(name, cols, rows):
 
 class TestViewGoldens(unittest.TestCase):
     def test_frames_match_goldens(self):
-        for name, build in FIXTURES:
-            for cols, rows in SIZES:
+        for name, build, sizes in ALL_FIXTURES:
+            for cols, rows in sizes:
                 with self.subTest(view=name, size="%dx%d" % (cols, rows)):
                     frame = render_frame(build, cols, rows)
                     path = golden_path(name, cols, rows)
@@ -108,7 +142,7 @@ class TestViewGoldens(unittest.TestCase):
 
     def test_render_is_deterministic_in_process(self):
         """Two renders from fresh fixture states are byte-identical."""
-        for name, build in FIXTURES:
+        for name, build, _sizes in ALL_FIXTURES:
             with self.subTest(view=name):
                 a = render_frame(build, 120, 40)
                 b = render_frame(build, 120, 40)
