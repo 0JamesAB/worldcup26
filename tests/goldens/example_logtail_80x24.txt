@@ -1,0 +1,24 @@
+ LOGTAIL   120 lines  0.7/s                                             FOLLOW  
+────────────────────────────────────────────────────────────────────────────────
+ TIME      LVL    MESSAGE                                                       
+ 09:02:17  DEBUG  retry backoff 556ms for billing                               
+ 09:02:18  DEBUG  retry backoff 766ms for auth                                  
+ 09:02:19  WARN   search p99 above budget (434ms)                               
+ 09:02:20  INFO   flushed 741 rows to auth                                      
+ 09:02:22  DEBUG  gc pause 169ms                                                
+ 09:02:22  DEBUG  gc pause 660ms                                                
+ 09:02:24  WARN   slow query 311ms on billing                                   
+ 09:02:25  DEBUG  gc pause 131ms                                                
+ 09:02:25  INFO   GET /v1/notify 200 in 76ms                                    
+ 09:02:26  INFO   flushed 358 rows to api-gateway                               
+ 09:02:27  INFO   flushed 254 rows to ingest                                    
+ 09:02:29  INFO   worker ingest heartbeat ok                                    
+ 09:02:30  INFO   GET /v1/search 200 in 798ms                                   
+ 09:02:31  INFO   GET /v1/auth 200 in 334ms                                     
+ 09:02:32  INFO   worker notify heartbeat ok                                    
+ 09:02:34  INFO   GET /v1/auth 200 in 827ms                                     
+ 09:02:35  WARN   queue depth 421 on billing                                    
+ 09:02:37  INFO   GET /v1/auth 200 in 454ms                                     
+ 09:02:39  INFO   GET /v1/search 200 in 276ms                                   
+ 09:02:40  DEBUG  retry backoff 271ms for search                                
+  ↑↓  move   f  follow   Enter  open   /  filter   :  cmd   q  quit             

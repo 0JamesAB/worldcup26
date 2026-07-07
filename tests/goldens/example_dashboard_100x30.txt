@@ -1,0 +1,30 @@
+ FLEET OPS   prod   3 regions                                                             ⠋ polling 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ──────────────────────── services ────────────────────────  ─────────── node capacity ──────────── 
+ SERVICE        REG  ST        P50                  LAST 12  CPU      ███████████████░░░░░░░░░  62% 
+   api-gateway  iad  OK       24ms             ▇█▇█▇█▇▇█▇█▇  Memory   ████████████░░░░░░░░░░░░  48% 
+   auth         iad  OK       11ms             █▇▇█▇█▇▇█▇▇▇  Disk     ████████████████████░░░░  83% 
+ ▸ billing      fra  WARN     87ms             ▄▄▅▆▆▇▇█████  Network  ██████░░░░░░░░░░░░░░░░░░  27% 
+   search       sin  OK       33ms             █▇▇████▇▇███                                         
+   ingest       iad  OK       18ms             █▇█▇▇█▇▇█▇▇▇                                         
+   ml-ranker    fra  DOWN       --             ▃▃▃▃▄▅▆█▁▁▁▁  ────────────── deploys ─────────────── 
+   notify       sin  OK       29ms             ██▇█████▇███  TAG      TARGET                        
+   archive      iad  OK       51ms             ████████████  v2.14.0  api-gateway              done 
+                                                             v2.14.0  auth                     done 
+                                                             v2.14.0  billing               rolling 
+                                                             v2.13.9  ml-ranker                held 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ↑↓  select   q  quit                                                        billing  ·  tui 0.5.0 
