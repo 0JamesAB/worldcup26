@@ -962,13 +962,17 @@ class TestSelectListMatchesViewLive(unittest.TestCase):
                     # exactly render()'s view_live rect: rows [2, rows-2)
                     views.view_live(cv.region(hits=st.hits).rows(2, -2),
                                     st, F.FRAME + 1)
-                    # visible card index -> absolute top row, via its hit
+                    # visible card index -> absolute top row, via its hit:
+                    # the actions are select_list click closures, so invoke
+                    # one and read the cursor to learn the item's index
                     seen = {}
                     for y in range(rows):
                         for x in range(cols):
                             a = st.hits.lookup(y, x)
                             if a is not None:
-                                seen[a[2]] = min(seen.get(a[2], y), y)
+                                a()
+                                i = st.live_ls.sel
+                                seen[i] = min(seen.get(i, y), y)
                     matches = sorted(
                         st.matches_today,
                         key=lambda m: (order.get(m.state, 3), m.date))

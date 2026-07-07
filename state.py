@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import espn
-from tui.interact import HitMap
+from tui.interact import HitMap, ListState
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
@@ -71,13 +71,13 @@ class AppState:
         self.match_index = {}            # event_id -> Match (for detail header)
 
         # selection / scroll
-        self.live_sel = 0
-        self.sched_sel = 0
+        self.live_ls = ListState()
+        self.sched_ls = ListState()      # schedule and team share the cursor
+        self.scorers_ls = ListState()
         self.groups_scroll = 0
         self.bracket_scroll_x = 0
         self.bracket_scroll_y = 0
         self.scorers_tab = 0             # 0 goals, 1 assists
-        self.scorers_sel = 0
         self.detail_event_id = None
         self.detail_tab = 0              # 0 lineups, 1 timeline, 2 stats
         self.detail_scroll = 0
@@ -96,6 +96,37 @@ class AppState:
         # status
         self.status = "starting…"
         self.loading = set()
+
+        # navigation hook: wc.py installs a callable(event_id) that opens
+        # the match centre; select_list on_open closures route through it.
+        self.open_match = None
+
+    # -- int shims over the ListState cursors --
+    # wc.py's key handling still reads/writes plain ints this phase; the
+    # app-kit phase rewires it onto the ListStates directly.
+    @property
+    def live_sel(self):
+        return self.live_ls.sel
+
+    @live_sel.setter
+    def live_sel(self, v):
+        self.live_ls.sel = v
+
+    @property
+    def sched_sel(self):
+        return self.sched_ls.sel
+
+    @sched_sel.setter
+    def sched_sel(self, v):
+        self.sched_ls.sel = v
+
+    @property
+    def scorers_sel(self):
+        return self.scorers_ls.sel
+
+    @scorers_sel.setter
+    def scorers_sel(self, v):
+        self.scorers_ls.sel = v
 
     # -- toast helpers --
     def toast(self, text, kind="info", ttl=8.0):

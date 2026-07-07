@@ -503,6 +503,15 @@ def draw_compact_row(row, m, selected, frame, left="time"):
 # views
 # ----------------------------------------------------------------------------
 
+def _on_open(st):
+    """select_list on_open callback: clicking an already-selected match
+    routes through the app-installed opener (a no-op until wc.py sets it)."""
+    def open_(m, i):
+        if st.open_match is not None:
+            st.open_match(m.id)
+    return open_
+
+
 def view_live(rg, st, frame):
     """Today's match cards. `rg` includes the context row (local row 0) so
     the overflow counter can sit there; cards fill the body below it."""
@@ -514,34 +523,23 @@ def view_live(rg, st, frame):
     # order: live first, then pre, then post
     order = {"in": 0, "pre": 1, "post": 2}
     matches.sort(key=lambda m: (order.get(m.state, 3), m.date or _FAR))
-    st.live_sel = max(0, min(st.live_sel, len(matches) - 1))
 
     card_w = min(78, rg.w - 4)
     col_x = max(2, (rg.w - card_w) // 2)
-    # Cards vary in height (pre-match cards carry odds bars), so scroll by
-    # advancing the start index until the selected card fits on screen.
-    avail = body.h
-    start = 0
-    # advance `start` until the run start..sel fits; keep the running sum O(n)
-    used = sum(card_rows(matches[k]) for k in range(st.live_sel + 1))
-    while start < st.live_sel and used > avail:
-        used -= card_rows(matches[start])
-        start += 1
-    r = 0
-    shown = 0
-    for i in range(start, len(matches)):
-        cons = card_rows(matches[i])
-        # box occupies cons-1 rows; keep whole cards (but always draw the first)
-        if shown > 0 and r + cons - 2 > body.h - 1:
-            break
-        card = body.sub(r, col_x, cons - 1, card_w)
-        draw_match_card(card, matches[i], i == st.live_sel, frame)
-        card.hit(("sel", "live_sel", i, True))
-        r += cons
-        shown += 1
-    if shown < len(matches):
+
+    def draw_card_item(item, m, i, selected):
+        # each item is card_rows(m) rows: the card box plus one gap row
+        draw_match_card(item.sub(0, col_x, item.h - 1, card_w), m,
+                        selected, frame)
+
+    def counter(start, stop, count):
         # counter on the context row, clear of the cards
-        rg.right(f"▲▼ {st.live_sel + 1}/{len(matches)}", fg(*P.faint), pad=2)
+        rg.right(f"▲▼ {st.live_ls.sel + 1}/{count}", fg(*P.faint), pad=2)
+
+    # Cards vary in height (pre-match cards carry odds bars); select_list's
+    # run-fit windowing advances the start index until the selection fits.
+    body.select_list(matches, st.live_ls, draw_card_item, item_h=card_rows,
+                     on_open=_on_open(st), counter=counter)
 
 
 def view_schedule(rg, st, frame):
@@ -567,18 +565,12 @@ def view_schedule(rg, st, frame):
     if not matches:
         center_msg(rg, 2, rg.h - 1, rg.w, "No fixtures on this date.   ←/→ to change day")
         return
-    st.sched_sel = max(0, min(st.sched_sel, len(matches) - 1))
-    r = 2
-    # simple scroll window
-    avail = rg.h - r
-    start = max(0, st.sched_sel - avail + 2) if st.sched_sel >= avail else 0
-    for i in range(start, len(matches)):
-        if r >= rg.h:
-            break
-        row = rg.rows(r, r + 1)
-        draw_compact_row(row, matches[i], i == st.sched_sel, frame)
-        row.hit(("sel", "sched_sel", i, True), 0, 2, 1, row.w - 4)
-        r += 1
+
+    def draw_row(row, m, i, selected):
+        draw_compact_row(row, m, selected, frame)
+
+    rg.rows(2).select_list(matches, st.sched_ls, draw_row,
+                           on_open=_on_open(st))
 
 
 def view_groups(rg, st, frame):
@@ -827,16 +819,11 @@ def view_scorers(rg, st, frame):
         return
     maxval = max((r["value"] for r in rows), default=1) or 1
     barmax = min(40, rg.w - 46)
-    r = 3
-    st.scorers_sel = max(0, min(st.scorers_sel, len(rows) - 1))
-    for i, row in enumerate(rows):
-        if r >= rg.h:
-            break
-        sel = i == st.scorers_sel
-        line = rg.rows(r, r + 1)
-        if sel:
+
+    def draw_row(line, row, i, selected):
+        if selected:
             line.fill_rect(0, 2, 1, line.w - 4, bg(*P.bg2))
-        bgs = bg(*P.bg2) if sel else bg(*P.bg0)
+        bgs = bg(*P.bg2) if selected else bg(*P.bg0)
         medal = {0: "🥇", 1: "🥈", 2: "🥉"}.get(i, f"{i+1:>2}")
         line.put(0, 3, str(medal), bgs + fg(*P.gold))
         line.put(0, 7, "●", bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))))
@@ -848,8 +835,8 @@ def view_scorers(rg, st, frame):
                           bgs + fg_hex(team_hex(row.get("team_id"), row.get("team_abbr"))),
                           c=bx, w=barmax)
         line.put(0, bx + filln + 1, str(row["value"]), bgs + fg(*P.gold) + BOLD)
-        line.hit(("sel", "scorers_sel", i, False), 0, 2, 1, line.w - 4)
-        r += 1
+
+    rg.rows(3).select_list(rows, st.scorers_ls, draw_row)
 
 
 # ----------------------------------------------------------------------------
@@ -1187,15 +1174,12 @@ def view_team(rg, st, frame):
     if not matches:
         center_msg(rg, 3, rg.h - 1, rg.w, "Loading team fixtures…")
         return
-    r = 3
-    st.sched_sel = max(0, min(st.sched_sel, len(matches) - 1))
-    for i, m in enumerate(matches):
-        if r >= rg.h:
-            break
-        row = rg.rows(r, r + 1)
-        draw_compact_row(row, m, i == st.sched_sel, frame, left="date")
-        row.hit(("sel", "sched_sel", i, True), 0, 2, 1, row.w - 4)
-        r += 1
+
+    def draw_row(row, m, i, selected):
+        draw_compact_row(row, m, selected, frame, left="date")
+
+    rg.rows(3).select_list(matches, st.sched_ls, draw_row,
+                           on_open=_on_open(st))
 
 
 # ----------------------------------------------------------------------------

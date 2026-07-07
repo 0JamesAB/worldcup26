@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dashboard.py - Self-contained demo of the tui library (v0.3.0 APIs).
+dashboard.py - Self-contained demo of the tui library (v0.4.0 APIs).
 
 A fake "fleet operations" dashboard that composes the new pieces:
 
@@ -9,9 +9,9 @@ A fake "fleet operations" dashboard that composes the new pieces:
     split_v / split_h  flexbox-style layout, straight to child Regions
     at/write/gap       flowing cursor (header badges)
     right()            right-aligned text (spinner)
-    table/spark/       widget sugar on Region; the sparkline column is
-    progress/rule      a clipped sub-Region, no alignment arithmetic
-    ListState          clamped cursor + scroll window over the services
+    table/spark/       widget sugar on Region; the sparkline is drawn in
+    progress/rule      the flex column, no alignment arithmetic
+    select_list        ListState-windowed service rows (one Region each)
     spinner            animated "polling" indicator
 
 Run it interactively from the repo root:
@@ -107,38 +107,37 @@ def draw_frame(cols, rows, frame, state):
 
     left.rule(title="services", style=fg(*t.line),
               title_style=fg(*t.dim) + BOLD)
-    visible = max(1, left.h - 2)
-    start, stop = state.window(visible)
     spark_w = 12
     cols_spec = [("SERVICE", 15, "left"), ("REG", 5, "left"),
                  ("ST", 6, "left"), ("P50", 7, "right"),
                  (f"{'LAST 12':>{spark_w}}", -1, "right")]
-    table_rows = []
-    for i in range(start, stop):
-        name, region, status, p50, _hist = SERVICES[i]
-        sel = (i == state.sel)
+    left.table(cols_spec, [], r=1, header_style=fg(*t.faint) + BOLD)
+    row_spec = [("", cw, align) for _, cw, align in cols_spec]
+    spark_x = widgets.col_layout(cols_spec, left.w)[-1][0]
+
+    def draw_service(row, svc, i, sel):
+        name, region, status, p50, hist = svc
         row_bg = bg(*t.bg2) if sel else ""
         txt = fg(*t.white) + BOLD if sel else fg(*t.text)
         mark = "▸ " if sel else "  "
-        table_rows.append([
+        row.table(row_spec, [[
             (mark + name, row_bg + txt),
             (region, row_bg + fg(*t.dim)),
             (status, row_bg + status_style(t, status)),
             (f"{p50}ms" if p50 else "--", row_bg + fg(*t.dim)),
             None,  # sparkline drawn separately below
-        ])
-    left.table(cols_spec, table_rows, r=1, header_style=fg(*t.faint) + BOLD)
-    # The sparkline column is its own clipped sub-Region past the fixed
-    # columns: drawing right-aligned inside it can never overwrite the P50
-    # column, and a too-narrow panel just clips the history's left edge.
-    fixed_w = sum(cw for _, cw, _ in cols_spec if cw >= 0)
-    sparks = left.region(2, fixed_w)
-    for row_i, i in enumerate(range(start, stop)):
-        hist = SERVICES[i][4]
-        sel_bg = bg(*t.bg2) if i == state.sel else ""
-        color = t.error if SERVICES[i][2] == "DOWN" else t.accent2
-        sparks.spark(hist, r=row_i, c=sparks.w - len(hist),
-                     style=sel_bg + fg(*color), lo=0)
+        ]])
+        # The sparkline draws right-aligned into its own clipped sub-Region
+        # past the fixed columns: it can never overwrite the P50 column, and
+        # a too-narrow panel just clips the history's left edge.
+        sparks = row.region(0, spark_x)
+        color = t.error if status == "DOWN" else t.accent2
+        sparks.spark(hist, c=sparks.w - len(hist),
+                     style=row_bg + fg(*color), lo=0)
+
+    # ListState-windowed, one row per service (scrolls when the panel is
+    # shorter than the fleet).
+    left.region(2).select_list(SERVICES, state, draw_service)
 
     # -- side column: meters + deploys --------------------------------------
     meters, deploys = side.split_v(Fixed(2 + len(METERS)), Flex(1), gap=1)

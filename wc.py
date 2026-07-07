@@ -149,15 +149,12 @@ def handle_mouse(st, ev, refresher):
     action = st.hits.lookup(ev.row, ev.col)
     if not action:
         return
+    if callable(action):
+        action()   # select_list integrated hit: click selects / opens
+        return
     kind = action[0]
     if kind == "view":
         change_view(st, action[1])
-    elif kind == "sel":
-        _, attr, i, openable = action
-        if openable and getattr(st, attr, None) == i:
-            open_selected(st, refresher)
-        else:
-            setattr(st, attr, i)
     elif kind == "open":
         open_match(st, refresher, action[1])
     elif kind == "scorers_tab":
@@ -396,6 +393,7 @@ def main():
     if opts["date"]:
         st.schedule_date = opts["date"]
     refresher = S.Refresher(st)
+    st.open_match = lambda eid: open_match(st, refresher, eid)
     initial_load(st, refresher)
     if opts["team"]:
         start_team(st, refresher, opts["team"])
