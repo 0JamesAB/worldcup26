@@ -100,7 +100,7 @@ class Region:
 
     # -- Canvas protocol (local coordinates) ---------------------------------
 
-    def put(self, r, c, text, style="", max_w=None):
+    def put(self, r, c, text, style="", *, max_w=None):
         """Write plain `text` at local (r, c). Returns the local end col.
 
         max_w fits the text into that many columns (ellipsis-truncated).
@@ -108,11 +108,11 @@ class Region:
         if max_w is not None:
             text = _fit(text, max_w)
         return self._cv.put(self._r + r, self._c + c, text, _sty(style),
-                            self._clip) - self._c
+                            clip=self._clip) - self._c
 
-    def put_clipped(self, r, c, text, style="", maxw=None):
-        """Canvas-protocol alias for put(..., max_w=maxw)."""
-        return self.put(r, c, text, style, max_w=maxw)
+    def put_clipped(self, r, c, text, style="", *, max_w=None):
+        """Canvas-protocol alias for put(..., max_w=max_w)."""
+        return self.put(r, c, text, style, max_w=max_w)
 
     def fill_rect(self, r, c, h, w, style, ch=" "):
         self._cv.fill_rect(self._r + r, self._c + c, h, w, _sty(style), ch,
@@ -129,17 +129,17 @@ class Region:
         if length is None:
             length = self.w - c
         self._cv.hline(self._r + r, self._c + c, length, _sty(style), ch,
-                       self._clip)
+                       clip=self._clip)
 
     def vline(self, r, c, length=None, style="", ch="│"):
         """Vertical line; length None runs to the bottom edge."""
         if length is None:
             length = self.h - r
         self._cv.vline(self._r + r, self._c + c, length, _sty(style), ch,
-                       self._clip)
+                       clip=self._clip)
 
     def box(self, r=0, c=0, h=None, w=None, style="", chars=LIGHT, title="",
-            title_style=None, fillstyle=None):
+            title_style=None, fill_style=None):
         """Draw a box (whole region by default). Returns the inner Region."""
         if h is None:
             h = self.h - r
@@ -149,38 +149,40 @@ class Region:
                      chars=chars, title=title,
                      title_style=(None if title_style is None
                                   else _sty(title_style)),
-                     fillstyle=None if fillstyle is None else _sty(fillstyle),
+                     fill_style=None if fill_style is None else _sty(fill_style),
                      clip=self._clip)
         return Region(self, r + 1, c + 1, max(0, h - 2), max(0, w - 2))
 
     # -- alignment verbs ------------------------------------------------------
 
-    def left(self, text, style="", row=0, pad=0):
-        """Left-align `text` at column `pad`. Returns the local end col."""
+    def left(self, text, style="", r=0, pad=0):
+        """Left-align `text` at column `pad` on row `r`. Returns the local
+        end col."""
         avail = self.w - pad
         if avail <= 0:
             return pad
-        return self.put(row, pad, _fit(text, avail), style)
+        return self.put(r, pad, _fit(text, avail), style)
 
-    def right(self, text, style="", row=0, pad=0):
-        """Right-align `text`, `pad` cols in from the right edge. Returns
-        the local start col."""
+    def right(self, text, style="", r=0, pad=0):
+        """Right-align `text` on row `r`, `pad` cols in from the right edge.
+        Returns the local start col."""
         avail = self.w - pad
         if avail <= 0:
             return max(0, avail)
         text = _fit(text, avail)
         x = max(0, self.w - pad - term.display_width(text))
-        self.put(row, x, text, style)
+        self.put(r, x, text, style)
         return x
 
-    def center(self, text, style="", row=0, pad=0):
-        """Center `text` between `pad` insets. Returns the local start col."""
+    def center(self, text, style="", r=0, pad=0):
+        """Center `text` on row `r` between `pad` insets. Returns the local
+        start col."""
         avail = self.w - 2 * pad
         if avail <= 0:
             return pad
         text = _fit(text, avail)
         x = pad + max(0, (avail - term.display_width(text)) // 2)
-        self.put(row, x, text, style)
+        self.put(r, x, text, style)
         return x
 
     # -- cursor ---------------------------------------------------------------
@@ -270,8 +272,9 @@ class Region:
             self.hits.add(y0, x0, y1 - y0, x1 - x0, action)
 
     def blit(self, src, src_r=0, src_c=0, r=0, c=0):
-        """Blit a region-sized window of Canvas `src` (from source offset
-        (src_r, src_c)) at local (r, c); the Canvas blit repairs
+        """Blit a window of Canvas `src` (from source offset (src_r, src_c))
+        at local (r, c). The window covers the rest of this region from
+        (r, c) — i.e. h-r rows by w-c cols. The Canvas blit repairs
         wide-glyph tears at the window edges."""
         self._cv.blit(src, self._r + r, self._c + c, src_r=src_r,
                       src_c=src_c, h=max(0, self.h - r),

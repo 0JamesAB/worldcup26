@@ -17,7 +17,7 @@ from .term import (fg, bg, fg_hex, bg_hex, hex_rgb, style,
                    wrap, MouseEvent)
 from .canvas import Canvas, Cell, LIGHT, HEAVY, DOUBLE
 from .region import Region
-from .theme import Theme, get_theme, set_theme
+from .theme import Theme, get_theme, set_theme, presets
 from .layout import Rect, Fixed, Flex, hsplit, vsplit
 from .interact import ListState, ScrollState, HitMap
 from .styles import Style

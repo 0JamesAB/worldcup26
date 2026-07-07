@@ -63,7 +63,7 @@ class Canvas:
                 cell.style = style
                 cell.cont = False
 
-    def put(self, r, c, text, style="", clip=None):
+    def put(self, r, c, text, style="", *, clip=None):
         """Write plain `text` starting at row r, col c. Returns end column.
 
         `clip` is a (y0, x0, y1, x1) half-open rect in canvas coords, already
@@ -100,44 +100,44 @@ class Canvas:
             x += w
         return x
 
-    def put_clipped(self, r, c, text, style="", maxw=None, clip=None):
-        if maxw is not None:
-            text = term.truncate(text, maxw, ellipsis="…") if term.display_width(text) > maxw else text
+    def put_clipped(self, r, c, text, style="", *, max_w=None, clip=None):
+        if max_w is not None:
+            text = term.truncate(text, max_w, ellipsis="…") if term.display_width(text) > max_w else text
             # truncate may inject ANSI; strip for canvas safety
             text = term.strip_ansi(text)
-        return self.put(r, c, text, style, clip)
+        return self.put(r, c, text, style, clip=clip)
 
     def hline(self, r, c, length, style="", ch="─", clip=None):
         if term.char_width(ch) == 1:
-            self.put(r, c, ch * length, style, clip)
+            self.put(r, c, ch * length, style, clip=clip)
             return
         for i in range(length):
-            self.put(r, c + i, ch, style, clip)
+            self.put(r, c + i, ch, style, clip=clip)
 
     def vline(self, r, c, length, style="", ch="│", clip=None):
         for i in range(length):
-            self.put(r + i, c, ch, style, clip)
+            self.put(r + i, c, ch, style, clip=clip)
 
     def box(self, r, c, h, w, style="", chars=LIGHT, title="", title_style=None,
-            fillstyle=None, clip=None):
+            fill_style=None, clip=None):
         """Draw a box at (r,c) of size h x w. Optional centered/left title."""
         if h < 2 or w < 2:
             return
-        if fillstyle is not None:
-            self.fill_rect(r + 1, c + 1, h - 2, w - 2, fillstyle, clip=clip)
-        self.put(r, c, chars["tl"], style, clip)
-        self.put(r, c + w - 1, chars["tr"], style, clip)
-        self.put(r + h - 1, c, chars["bl"], style, clip)
-        self.put(r + h - 1, c + w - 1, chars["br"], style, clip)
-        self.hline(r, c + 1, w - 2, style, chars["h"], clip)
-        self.hline(r + h - 1, c + 1, w - 2, style, chars["h"], clip)
-        self.vline(r + 1, c, h - 2, style, chars["v"], clip)
-        self.vline(r + 1, c + w - 1, h - 2, style, chars["v"], clip)
+        if fill_style is not None:
+            self.fill_rect(r + 1, c + 1, h - 2, w - 2, fill_style, clip=clip)
+        self.put(r, c, chars["tl"], style, clip=clip)
+        self.put(r, c + w - 1, chars["tr"], style, clip=clip)
+        self.put(r + h - 1, c, chars["bl"], style, clip=clip)
+        self.put(r + h - 1, c + w - 1, chars["br"], style, clip=clip)
+        self.hline(r, c + 1, w - 2, style, chars["h"], clip=clip)
+        self.hline(r + h - 1, c + 1, w - 2, style, chars["h"], clip=clip)
+        self.vline(r + 1, c, h - 2, style, chars["v"], clip=clip)
+        self.vline(r + 1, c + w - 1, h - 2, style, chars["v"], clip=clip)
         if title:
             ts = title_style if title_style is not None else style
             t = " " + title.strip() + " "
             tx = c + 2
-            self.put(r, tx, t, ts, clip)
+            self.put(r, tx, t, ts, clip=clip)
 
     def to_lines(self):
         lines = []

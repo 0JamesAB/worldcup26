@@ -206,7 +206,7 @@ def draw_card(cv, r, c, h, w, border_style="", fill_style="", chars=None,
     columns inside each vertical border).
     """
     cv.box(r, c, h, w, style=border_style, chars=chars or LIGHT,
-           fillstyle=fill_style)
+           fill_style=fill_style)
     if title:
         cv.put(r, c + 2,
                term.strip_ansi(term.truncate(title, w - title_reserve)),

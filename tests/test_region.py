@@ -109,7 +109,7 @@ class TestPutTranslation(unittest.TestCase):
 
     def test_put_clipped_alias(self):
         cv = Canvas(10, 1)
-        cv.region().put_clipped(0, 0, "abcdefgh", maxw=4)
+        cv.region().put_clipped(0, 0, "abcdefgh", max_w=4)
         self.assertEqual(row_text(cv, 0).rstrip(), "abc…")
 
 
@@ -476,7 +476,7 @@ class TestVerbs(unittest.TestCase):
                 widgets.center_msg(a, 1, 1, cols, msg, "S")
                 b = Canvas(cols, 3)
                 rg = b.region().inset(0, 2)
-                x = rg.center(msg, "S", row=1)
+                x = rg.center(msg, "S", r=1)
                 self.assertEqual(a.to_lines(), b.to_lines(), (cols, tw))
                 self.assertEqual(
                     x + 2, max(2, (cols - term.display_width(msg)) // 2),
@@ -496,7 +496,7 @@ class TestVerbs(unittest.TestCase):
     def test_left_returns_end_col(self):
         cv = Canvas(12, 2)
         rg = cv.region(0, 2, 2, 8)
-        end = rg.left("abc", "S", row=1, pad=1)
+        end = rg.left("abc", "S", r=1, pad=1)
         self.assertEqual(end, 4)
         self.assertEqual(cv.grid[1][3].ch, "a")
 
@@ -573,9 +573,9 @@ class TestStyleObjects(unittest.TestCase):
         cv = Canvas(12, 4)
         rg = cv.region()
         rg.put(0, 0, "a", self.st)
-        rg.left("b", self.st, row=1)
-        rg.right("c", self.st, row=2)
-        rg.center("d", self.st, row=3)
+        rg.left("b", self.st, r=1)
+        rg.right("c", self.st, r=2)
+        rg.center("d", self.st, r=3)
         self.assertEqual(cv.grid[0][0].style, self.s)
         self.assertEqual(cv.grid[1][0].style, self.s)
         self.assertEqual(cv.grid[2][11].style, self.s)
@@ -588,7 +588,7 @@ class TestStyleObjects(unittest.TestCase):
         rg.hline(1, 0, 3, self.st)
         rg.vline(2, 0, 2, self.st)
         rg.box(2, 2, 3, 6, style=self.st, title="T", title_style=self.st,
-               fillstyle=self.st)
+               fill_style=self.st)
         rg.at(5, 9).write("w", self.st)
         self.assertEqual(cv.grid[0][0].style, self.s)
         self.assertEqual(cv.grid[1][1].style, self.s)
@@ -608,7 +608,7 @@ class TestStyleObjects(unittest.TestCase):
         def scene(rg, style):
             rg.fill(style)
             rg.put(0, 0, "hi", style)
-            rg.center("mid", style, row=1)
+            rg.center("mid", style, r=1)
             rg.box(2, 0, 3, 8, style=style)
             rg.hbar(0.5, style, r=5, c=0, w=6)
         a = Canvas(14, 7)

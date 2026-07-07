@@ -3,7 +3,7 @@
 import unittest
 
 from tui import term, widgets
-from tui.theme import Theme, get_theme, set_theme, styles
+from tui.theme import Theme, get_theme, set_theme, presets
 
 
 class ThemeCase(unittest.TestCase):
@@ -96,7 +96,7 @@ class TestTabBarOverflow(unittest.TestCase):
 class TestStyles(ThemeCase):
     def test_combos_match_hand_concatenation(self):
         t = Theme
-        st = styles(t)
+        st = presets(t)
         bg, fg = term.bg, term.fg
         expected = {
             "base": bg(*t.bg0) + fg(*t.text),
@@ -118,24 +118,24 @@ class TestStyles(ThemeCase):
 
     def test_default_theme_is_installed_theme(self):
         set_theme(Loud)
-        self.assertIs(styles(), styles(Loud))
+        self.assertIs(presets(), presets(Loud))
 
     def test_cache_returns_same_object(self):
-        self.assertIs(styles(Theme), styles(Theme))
+        self.assertIs(presets(Theme), presets(Theme))
 
     def test_depth_change_gives_different_strings(self):
-        tc = styles(Theme)
+        tc = presets(Theme)
         term.set_color_depth("256")
-        st = styles(Theme)
+        st = presets(Theme)
         self.assertIsNot(st, tc)
         self.assertNotEqual(st.panel, tc.panel)
         self.assertEqual(st.panel, term.bg(*Theme.bg1) + term.fg(*Theme.text))
         term.set_color_depth("truecolor")
-        self.assertIs(styles(Theme), tc)
+        self.assertIs(presets(Theme), tc)
 
     def test_subclass_gets_its_own_entry(self):
-        st = styles(Loud)
-        self.assertIsNot(st, styles(Theme))
+        st = presets(Loud)
+        self.assertIsNot(st, presets(Theme))
         self.assertEqual(st.base, term.bg(1, 1, 1) + term.fg(250, 250, 250))
 
 

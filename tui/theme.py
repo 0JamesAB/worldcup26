@@ -6,7 +6,7 @@ override colors or add your own; install it once at startup with
 `set_theme(MyTheme)`. Widgets accept an optional `theme=` kwarg that
 defaults to the installed theme.
 
-`styles(theme)` returns cached pre-composed ANSI strings for the canonical
+`presets(theme)` returns cached pre-composed ANSI strings for the canonical
 combos. Strings are built bg-then-fg to stay byte-compatible with existing
 app output. Mutating a Theme class in place is not supported (the cache
 keys on the class); subclass and `set_theme` instead.
@@ -69,7 +69,7 @@ class Styles:
 _STYLE_CACHE = {}
 
 
-def styles(theme=None):
+def presets(theme=None):
     """Cached `Styles` for `theme` (default: installed) at the current depth.
 
     Entries are keyed by (theme class, color depth), so `set_color_depth`

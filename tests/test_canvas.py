@@ -40,7 +40,7 @@ class TestPut(unittest.TestCase):
 class TestPutClipped(unittest.TestCase):
     def test_truncates_to_maxw(self):
         cv = Canvas(20, 1)
-        cv.put_clipped(0, 0, "abcdefgh", maxw=4)
+        cv.put_clipped(0, 0, "abcdefgh", max_w=4)
         row = "".join(c.ch for c in cv.grid[0]).rstrip()
         self.assertEqual(row, "abc…")
 
@@ -164,7 +164,7 @@ class TestPutClip(unittest.TestCase):
 class TestPrimitiveClips(unittest.TestCase):
     def test_put_clipped_threads_clip(self):
         cv = Canvas(10, 1)
-        cv.put_clipped(0, 0, "abcdefgh", maxw=6, clip=(0, 0, 1, 4))
+        cv.put_clipped(0, 0, "abcdefgh", max_w=6, clip=(0, 0, 1, 4))
         row = "".join(c.ch for c in cv.grid[0]).rstrip()
         self.assertEqual(row, "abcd")
 

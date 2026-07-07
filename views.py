@@ -327,7 +327,7 @@ def draw_command_palette(root, st):
     y0 = status_row - h
     x0 = 1
     root.box(y0, x0, h, w, style=fg(*P.accent2), chars=LIGHT, title=title,
-             title_style=fg(*P.gold) + BOLD, fillstyle=bg(*P.bg2))
+             title_style=fg(*P.gold) + BOLD, fill_style=bg(*P.bg2))
     if len(sugg) > len(shown):
         more = f"{st.command_sel + 1}/{len(sugg)}"
         root.put(y0, x0 + w - term.display_width(more) - 2, more, bg(*P.bg2) + fg(*P.faint))
@@ -449,7 +449,7 @@ def draw_match_card(card, m, selected, frame):
     if show_odds:
         draw_odds_bars(inner, 2, m, fillstyle)
         prov = f" {m.odds.provider or 'odds'} "
-        card.center(prov, fg(*P.faint), row=card.h - 1, pad=2)
+        card.center(prov, fg(*P.faint), r=card.h - 1, pad=2)
 
 
 def compact_status(m, frame):
@@ -776,7 +776,7 @@ def draw_bracket_cell(cv, cy, cx, m, frame):
         border = fg(*P.live)
     elif m and m.is_post and m.season_slug == "final":
         border = fg(*P.gold)
-    cv.box(top, cx, 4, w, style=border, chars=LIGHT, fillstyle=bg(*P.bg1))
+    cv.box(top, cx, 4, w, style=border, chars=LIGHT, fill_style=bg(*P.bg1))
     inner = bg(*P.bg1)
     if not m:
         cv.put(cy, cx + 2, term.pad("—", w - 4), inner + fg(*P.faint))
@@ -1181,7 +1181,7 @@ def view_team(rg, st, frame):
         local = espn.to_local(nxt.date)
         when = local.strftime("%a %d %b · %H:%M") if local else ""
         nt = f"next: vs {opp.abbr if opp else '?'}  {when}"
-        rg.right(nt, bg(*P.bg1) + fg(*P.accent2), row=1, pad=2)
+        rg.right(nt, bg(*P.bg1) + fg(*P.accent2), r=1, pad=2)
     rg.hline(2, 2, rg.w - 4, fg(*P.line))
     if not matches:
         center_msg(rg, 3, rg.h - 1, rg.w, "Loading team fixtures…")
@@ -1206,7 +1206,7 @@ def view_help(rg, st, frame):
     bx = (rg.w - bw) // 2
     bh = min(rg.h, 26)
     inner = rg.box(0, bx, bh, bw, style=fg(*P.accent), chars=HEAVY, title="HELP",
-                   title_style=fg(*P.gold) + BOLD, fillstyle=bg(*P.bg1))
+                   title_style=fg(*P.gold) + BOLD, fill_style=bg(*P.bg1))
     r = 0
     inner.put(r, 1, "KEYBOARD", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
     keys = [
