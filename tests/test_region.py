@@ -1204,3 +1204,51 @@ class TestSelectListHitH(unittest.TestCase):
                        on_open=lambda it, i: opened.append(i))
         hits.lookup(4, 5)()            # click selected -> opens
         self.assertEqual(opened, [1])
+
+
+class TestInputWideChars(unittest.TestCase):
+    """Regression: input cursor/scroll are display-width aware."""
+
+    def _render(self, text, cursor, w=10, ghost=""):
+        from tui.canvas import Canvas
+        from tui.interact import LineEdit
+        cv = Canvas(w, 1)
+        ed = LineEdit()
+        ed.buf = text if hasattr(ed, "buf") else None
+        # drive through the public API to be safe
+        ed.clear()
+        for ch in text:
+            ed.handle_key(ch)
+        while ed.cursor > cursor:
+            from tui.term import Key
+            ed.handle_key(Key.LEFT)
+        rg = cv.region()
+        cx = rg.input(ed, ghost=ghost)
+        return cv, cx
+
+    def test_cursor_after_wide_glyphs(self):
+        cv, cx = self._render("日本語", 3)
+        # cursor at end-of-buffer sits at display column 6, not char col 3
+        self.assertEqual(cx, 6)
+        self.assertEqual(cv.grid[0][0].ch, "日")
+        self.assertEqual(cv.grid[0][2].ch, "本")
+        self.assertEqual(cv.grid[0][4].ch, "語")
+
+    def test_mid_buffer_cursor_on_wide_glyph(self):
+        cv, cx = self._render("日本語", 1)
+        self.assertEqual(cx, 2)                    # display col of 本
+        self.assertEqual(cv.grid[0][2].ch, "本")   # glyph intact (no tear)
+        self.assertFalse(cv.grid[0][3].cont is False and cv.grid[0][3].ch == " "
+                         and cv.grid[0][2].ch != "本")
+
+    def test_wide_scroll_keeps_cursor_visible(self):
+        # 6 wide glyphs = 12 columns in a 6-column pane; cursor at end
+        cv, cx = self._render("абвгде".replace("а", "日")[:1] * 6, 6, w=6)
+        self.assertLess(cx, 6)                     # cursor within the pane
+        # no torn wide glyph: every lead has its continuation
+        row = cv.grid[0]
+        for i, cell in enumerate(row):
+            if cell.ch and len(cell.ch) == 1 and not cell.cont:
+                from tui import term as T
+                if T.char_width(cell.ch) == 2 and i + 1 < len(row):
+                    self.assertTrue(row[i + 1].cont)

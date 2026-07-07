@@ -461,9 +461,9 @@ class Region:
         completion after the text. `edit` is anything with .text and
         .cursor (interact.LineEdit); key handling stays on it -- this
         only draws. The buffer scrolls horizontally to keep the cursor
-        visible; column math assumes single-width characters.
-        cursor_style defaults to `style` + REVERSE. Returns the
-        cursor's local column."""
+        visible; scrolling and the cursor cell are display-width aware
+        (wide glyphs occupy two columns). cursor_style defaults to
+        `style` + REVERSE. Returns the cursor's local column."""
         style = _sty(style)
         if cursor_style is None:
             cursor_style = style + term.REVERSE
@@ -475,13 +475,24 @@ class Region:
             return c
         text = edit.text
         cur = max(0, min(edit.cursor, len(text)))
-        off = cur - avail + 1 if cur >= avail else 0
-        vis = text[off:off + avail]
+        widths = [term.char_width(ch) for ch in text]
+        cur_w = widths[cur] if cur < len(text) else 1
+        # scroll in display columns so the cursor glyph stays fully visible
+        off = 0
+        while off < cur and sum(widths[off:cur]) + cur_w > avail:
+            off += 1
+        # visible slice: chars from `off` that fit within avail columns
+        end = off
+        used = 0
+        while end < len(text) and used + widths[end] <= avail:
+            used += widths[end]
+            end += 1
+        vis = text[off:end]
         self.put(r, c, vis, style)
-        tail = c + len(vis)
-        if ghost and off + len(vis) == len(text) and tail < self.w:
+        tail = c + used
+        if ghost and end == len(text) and tail < self.w:
             self.put(r, tail, ghost, style + term.DIM, max_w=self.w - tail)
-        cx = c + cur - off
+        cx = c + sum(widths[off:cur])
         if cur < len(text):
             ch = text[cur]
         elif ghost:

@@ -526,7 +526,9 @@ def draw_text_pane(cv, r, c, h, w, lines, scroll, wrap=True, style="",
         y += 1
     if pct and total > h:
         tag = str(scroll.pct) + "%"
-        cv.put(r, c + w - term.display_width(tag), tag, pct_style)
+        tw = term.display_width(tag)
+        if tw <= w:  # never show a clipped (misleading) percentage
+            cv.put(r, c + w - tw, tag, pct_style)
     return total
 
 
