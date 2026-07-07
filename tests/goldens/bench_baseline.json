@@ -2,7 +2,7 @@
   "meta": {
     "iterations": 200,
     "metric": "min ms/frame across runs",
-    "note": "numbers are machine-specific; compare only against a baseline captured on the same machine",
+    "note": "numbers are machine-specific; compare only against a baseline captured on the same machine. Captured from the pre-Region worktree (5ba37c3) via `bench_render.py --only SCENARIO`, one scenario per interpreter invocation on an idle machine: scenarios benched later inside one long invocation are OS-throttled 10-25% on Apple Silicon, so full-suite runs are not comparable against this file.",
     "platform": "macOS-26.5.1-arm64-arm-64bit",
     "python": "3.9.6",
     "runs": 5,
@@ -10,21 +10,21 @@
     "warmups": 5
   },
   "scenarios": {
-    "bracket": 5.862283334999994,
-    "bracket_scrolled": 6.030943124999997,
-    "dashboard": 1.9981033350000033,
-    "detail_lineups": 3.820418125000007,
-    "detail_odds": 1.9212285400000084,
-    "detail_stats": 2.177209999999974,
-    "detail_timeline": 1.8455160399999926,
-    "groups": 2.0445189600000013,
-    "help": 2.4306322950000236,
-    "live": 2.102509585,
-    "live_palette": 2.394124165,
-    "schedule": 2.0715783350000017,
-    "scorers_assists": 1.9096397900000108,
-    "scorers_goals": 1.937021250000015,
-    "team": 2.083777710000021
+    "bracket": 4.976,
+    "bracket_scrolled": 4.977,
+    "dashboard": 1.561,
+    "detail_lineups": 3.106,
+    "detail_odds": 1.563,
+    "detail_stats": 1.783,
+    "detail_timeline": 1.501,
+    "groups": 1.744,
+    "help": 1.95,
+    "live": 2.123,
+    "live_palette": 2.174,
+    "schedule": 1.804,
+    "scorers_assists": 1.575,
+    "scorers_goals": 1.593,
+    "team": 1.733
   },
-  "total_ms_per_frame": 40.62950459000005
+  "total_ms_per_frame": 34.163000000000004
 }

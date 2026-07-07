@@ -1,7 +1,7 @@
 """
 bench_render.py - Render-performance harness (not a unittest; run directly).
 
-    python3 tests/bench_render.py [--json]
+    python3 tests/bench_render.py [--json] [--only SCENARIO]
 
 Full-frame renders of every offline view fixture (tests/fixtures_views.py)
 at 120x40, plus the examples dashboard when it imports headlessly. Each
@@ -12,6 +12,13 @@ for a hot loop). --json emits machine-readable results on stdout.
 The pre-Region baseline lives in tests/goldens/bench_baseline.json; later
 phases compare against it with a <=5% regression gate. Numbers are
 machine-specific: compare only runs captured on the same machine.
+
+Beware OS throttling: on Apple Silicon, scenarios executed later within one
+long-running invocation measure 10-25% slow, so a full-suite run is NOT
+comparable scenario-by-scenario against the baseline. For gate checks, run
+one scenario per interpreter invocation (`--only SCENARIO`) on an idle
+machine, and prefer an interleaved same-session A/B against the baseline
+worktree over the stored numbers when the two disagree.
 """
 
 import json
@@ -97,6 +104,13 @@ def main(argv):
     dash = dashboard_scenario()
     if dash is not None:
         scenarios.append(("dashboard", dash))
+    if "--only" in argv:
+        i = argv.index("--only")
+        only = argv[i + 1] if i + 1 < len(argv) else ""
+        scenarios = [(n, fn) for n, fn in scenarios if n == only]
+        if not scenarios:
+            sys.stderr.write("unknown scenario: %r\n" % only)
+            return 2
 
     results = {}
     for name, fn in scenarios:

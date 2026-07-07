@@ -112,21 +112,23 @@ def draw_frame(cols, rows, frame, state):
                  ("ST", 6, "left"), ("P50", 7, "right"),
                  (f"{'LAST 12':>{spark_w}}", -1, "right")]
     left.table(cols_spec, [], r=1, header_style=fg(*t.faint) + BOLD)
-    row_spec = [("", cw, align) for _, cw, align in cols_spec]
-    spark_x = widgets.col_layout(cols_spec, left.w)[-1][0]
+    # One put per cell at the col_layout extents: draw_table would redo
+    # the layout and cell fitting for every one-row "table", and this
+    # closure runs once per visible service per frame.
+    (name_x, _), (reg_x, _), (st_x, _), (p50_x, p50_w), (spark_x, _) = \
+        widgets.col_layout(cols_spec, left.w)
+    dim, text_st = fg(*t.dim), fg(*t.text)
+    sel_st = fg(*t.white) + BOLD
 
     def draw_service(row, svc, i, sel):
         name, region, status, p50, hist = svc
         row_bg = bg(*t.bg2) if sel else ""
-        txt = fg(*t.white) + BOLD if sel else fg(*t.text)
-        mark = "▸ " if sel else "  "
-        row.table(row_spec, [[
-            (mark + name, row_bg + txt),
-            (region, row_bg + fg(*t.dim)),
-            (status, row_bg + status_style(t, status)),
-            (f"{p50}ms" if p50 else "--", row_bg + fg(*t.dim)),
-            None,  # sparkline drawn separately below
-        ]])
+        row.put(0, name_x, ("▸ " if sel else "  ") + name,
+                row_bg + (sel_st if sel else text_st))
+        row.put(0, reg_x, region, row_bg + dim)
+        row.put(0, st_x, status, row_bg + status_style(t, status))
+        p50_txt = f"{p50}ms" if p50 else "--"
+        row.put(0, p50_x, p50_txt.rjust(p50_w), row_bg + dim)
         # The sparkline draws right-aligned into its own clipped sub-Region
         # past the fixed columns: it can never overwrite the P50 column, and
         # a too-narrow panel just clips the history's left edge.

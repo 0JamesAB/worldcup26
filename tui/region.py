@@ -388,33 +388,37 @@ class Region:
         state.set_count(count)
         if count == 0 or self.h <= 0:
             return (0, 0)
+        sel = state.sel
         if callable(item_h):
             heights = [item_h(it) for it in items]
+            start = 0
+            # advance `start` until the run start..sel fits; running sum O(n)
+            used = sum(heights[:sel + 1])
+            while start < sel and used > self.h:
+                used -= heights[start]
+                start += 1
         else:
-            heights = [item_h] * count
-        sel = state.sel
-        start = 0
-        # advance `start` until the run start..sel fits; running sum O(n)
-        used = sum(heights[:sel + 1])
-        while start < sel and used > self.h:
-            used -= heights[start]
-            start += 1
+            heights = None
+            # uniform heights: the run-fit window closes to arithmetic
+            fit = self.h // item_h if item_h > 0 else count
+            start = min(sel, max(0, sel + 1 - fit))
         r = 0
         stop = start
         for i in range(start, count):
-            rows_i = heights[i]
+            rows_i = heights[i] if heights is not None else item_h
             # keep whole items (but always draw the first)
             if i > start and r + rows_i > self.h:
                 break
             item_rg = self.sub(r, 0, rows_i, self.w)
             draw_item(item_rg, items[i], i, i == sel)
 
-            def click(i=i, item=items[i]):
-                if i == state.sel and on_open is not None:
-                    on_open(item, i)
-                state.sel = i
+            if self.hits is not None:
+                def click(i=i, item=items[i]):
+                    if i == state.sel and on_open is not None:
+                        on_open(item, i)
+                    state.sel = i
 
-            item_rg.hit(click)
+                item_rg.hit(click)
             r += rows_i
             stop = i + 1
         if counter is not None and stop - start < count:
