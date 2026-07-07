@@ -212,3 +212,36 @@ class TestMouse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCliStartViewSeeding(unittest.TestCase):
+    """Regression: overlay CLI start views (--ENG, help) sit on a LIVE
+    base so Esc drops to live scores instead of being dead; Esc-pop
+    wakes the refresher (the old loop woke on every key)."""
+
+    def test_team_start_esc_goes_live(self):
+        st, app, refresher = make_app()
+        wc.seed_view(app, S.TEAM)
+        self.assertEqual(app.stack, [S.LIVE, S.TEAM])
+        app.dispatch_key(Key.ESC)
+        self.assertEqual(app.view, S.LIVE)
+
+    def test_help_start_esc_goes_live(self):
+        st, app, refresher = make_app()
+        wc.seed_view(app, S.HELP)
+        app.dispatch_key(Key.ESC)
+        self.assertEqual(app.view, S.LIVE)
+
+    def test_tab_start_unchanged(self):
+        st, app, refresher = make_app()
+        wc.seed_view(app, S.GROUPS)
+        self.assertEqual(app.stack, [S.GROUPS])
+
+    def test_esc_pop_wakes_refresher(self):
+        st, app, refresher = make_app()
+        app.goto(S.LIVE)
+        app.push(S.DETAIL)
+        refresher._wake.clear()
+        app.dispatch_key(Key.ESC)
+        self.assertEqual(app.view, S.LIVE)
+        self.assertTrue(refresher._wake.is_set())

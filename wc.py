@@ -171,10 +171,17 @@ def build_app(st, refresher):
                   on_status=lambda msg: app.toast(msg, "info", 4))
     app.palette = pal
 
+    def back():
+        """Esc: pop the view stack and wake the refresher so the view
+        underneath refreshes promptly (the old loop woke on every key)."""
+        app.pop()
+        refresher.wake()
+
     binds = {("q", "Q"): app.quit,
              (":", "/"): lambda: pal.open_(app),
              "?": open_help,
              ("r", "R"): refresh_now,
+             Key.ESC: back,
              Key.TAB: lambda: cycle(1),
              Key.SHIFT_TAB: lambda: cycle(-1)}
     for i, v in enumerate(S.TAB_VIEWS):
@@ -197,6 +204,17 @@ def render_frame(app, cols, rows):
         cv = Canvas(cols, rows, views.base())
         views.draw_frame(cv.region(hits=app.hits), app)
         return cv.to_lines()
+
+
+def seed_view(app, view):
+    """Seed the view stack for a CLI start view. Overlay views (team,
+    help, detail) sit on a LIVE base so Esc drops to live scores,
+    matching the pre-kit prev_view behavior."""
+    if view in (S.TEAM, S.HELP, S.DETAIL):
+        app.goto(S.LIVE)
+        app.push(view)
+    else:
+        app.goto(view)
 
 
 def initial_load(st, refresher):
@@ -309,7 +327,7 @@ def snapshot(opts):
     st = S.AppState()
     refresher = S.Refresher(st)
     app = build_app(st, refresher)
-    app.goto(opts["view"])
+    seed_view(app, opts["view"])
     if opts["date"]:
         st.schedule_date = opts["date"]
     initial_load(st, refresher)
@@ -348,7 +366,7 @@ def main():
         st.schedule_date = opts["date"]
     refresher = S.Refresher(st)
     app = build_app(st, refresher)
-    app.goto(opts["view"])
+    seed_view(app, opts["view"])
     initial_load(st, refresher)
     if opts["team"]:
         start_team(st, app, refresher, opts["team"])
