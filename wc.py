@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-wc.py - World Cup 2026 terminal dashboard. Entry point + input loop.
+wc.py - World Cup 2026 terminal dashboard. CLI entry point + app wiring.
 
 Usage:
     python3 wc.py                 # launch the live dashboard
@@ -13,13 +13,15 @@ Keys:  1-5 views · Tab cycle · ↑↓ move · ←→ day/tabs/scroll · Enter 
 """
 
 import sys
-import time
 from datetime import datetime, timezone
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
 from tui import term
-from tui.term import Key, RawTerminal, Renderer, read_key
+from tui.app import App
+from tui.canvas import Canvas
+from tui.commands import CommandSet, Palette
+from tui.term import Key
 from tui.theme import set_theme
 from palette import WorldCupTheme
 set_theme(WorldCupTheme)
@@ -35,214 +37,167 @@ def live_ordered(st):
                   key=lambda m: (order.get(m.state, 3), m.date or FAR))
 
 
-def current_list(st):
-    if st.view == S.LIVE:
-        return live_ordered(st), "live_sel"
-    if st.view == S.SCHEDULE:
-        return list(st.schedule_matches), "sched_sel"
-    if st.view == S.TEAM:
-        return list(getattr(st, "team_matches", [])), "sched_sel"
-    if st.view == S.SCORERS:
-        key = "goals" if st.scorers_tab == 0 else "assists"
-        return list(st.scorers.get(key, [])), "scorers_sel"
-    return [], None
+# ----------------------------------------------------------------------------
+# app wiring — the whole input surface lives here, on the tui App kit
+# ----------------------------------------------------------------------------
 
+def build_app(st, refresher):
+    """Wire the World Cup app: eight views with their keymaps, the global
+    bindings, the ':' palette, and the state hooks views.py's mouse-hit
+    closures call. Routing (view stack, capture, dispatch) is the kit's."""
+    app = App(state=st, fps=8, tick=0.33, mouse=True, lock=st.lock)
+    st.app = app             # st.view / st.dirty now read through the app
+    app.toasts = st.toasts   # one shared toast store (kit prunes, app draws)
 
-def open_match(st, refresher, event_id):
-    """Jump to the match centre for an event id."""
-    st.detail_event_id = event_id
-    if st.view != S.DETAIL:
-        st.prev_view = st.view
-    st.view = S.DETAIL
-    st.detail_tab = 0
-    st.detail_scroll = 0
-    refresher.request_summary(event_id)
+    def goto(view):
+        app.goto(view)
+        refresher.wake()     # fetch the new view's data promptly
 
+    def cycle(direction):
+        cur = app.view
+        if cur not in S.TAB_VIEWS:   # detail/help/team: cycle from the tab below
+            cur = next((v for v in reversed(app.stack) if v in S.TAB_VIEWS),
+                       S.TAB_VIEWS[0])
+        i = S.TAB_VIEWS.index(cur)
+        goto(S.TAB_VIEWS[(i + direction) % len(S.TAB_VIEWS)])
 
-def open_selected(st, refresher):
-    lst, attr = current_list(st)
-    if not lst or attr is None or st.view == S.SCORERS:
-        return
-    idx = max(0, min(getattr(st, attr), len(lst) - 1))
-    open_match(st, refresher, lst[idx].id)
-
-
-def move_selection(st, delta):
-    lst, attr = current_list(st)
-    if attr is None:
-        return
-    n = len(lst)
-    if n == 0:
-        return
-    cur = getattr(st, attr)
-    setattr(st, attr, max(0, min(cur + delta, n - 1)))
-
-
-def change_view(st, view):
-    if view == st.view:
-        return
-    if st.view not in (S.DETAIL, S.HELP, S.TEAM):
-        st.prev_view = st.view
-    st.view = view
-
-
-def cycle_view(st, direction):
-    views_order = S.TAB_VIEWS
-    cur = st.view if st.view in views_order else st.prev_view
-    i = views_order.index(cur) if cur in views_order else 0
-    change_view(st, views_order[(i + direction) % len(views_order)])
-
-
-def handle_normal_key(st, key, refresher):
-    if key in ("q", "Q"):
-        st.running = False
-    elif key in (":", "/"):
-        st.command_mode = True
-        st.command_buf = ""
-    elif key in ("?",):
-        change_view(st, S.HELP)
-    elif key in ("r", "R"):
-        refresher.force_all()
-        st.toast("refreshing…", "info", 3)
-    elif key in ("1", "2", "3", "4", "5"):
-        change_view(st, S.TAB_VIEWS[int(key) - 1])
-    elif key == Key.TAB:
-        cycle_view(st, 1)
-    elif key == Key.SHIFT_TAB:
-        cycle_view(st, -1)
-    elif key == Key.ESC:
-        if st.view in (S.DETAIL, S.HELP, S.TEAM):
-            st.view = st.prev_view or S.LIVE
-    elif key == Key.ENTER:
-        if st.view in (S.LIVE, S.SCHEDULE, S.TEAM):
-            open_selected(st, refresher)
-    elif key in (Key.UP, "k"):
-        nav_vertical(st, -1)
-    elif key in (Key.DOWN, "j"):
-        nav_vertical(st, 1)
-    elif key in (Key.LEFT, "h"):
-        nav_horizontal(st, -1, refresher)
-    elif key in (Key.RIGHT, "l"):
-        nav_horizontal(st, 1, refresher)
-    elif key == Key.PGUP:
-        nav_vertical(st, -5)
-    elif key == Key.PGDN:
-        nav_vertical(st, 5)
-    elif key == Key.HOME:
-        nav_vertical(st, -9999)
-    elif key == Key.END:
-        nav_vertical(st, 9999)
-
-
-def handle_mouse(st, ev, refresher):
-    """Route a MouseEvent: wheel scrolls, left-click hits a region.
-
-    Click semantics: clicking a list item / card selects it; clicking the
-    already-selected one opens it (match centre). Tabs, date arrows and
-    bracket cells act immediately.
-    """
-    if ev.kind == "wheel":
-        nav_vertical(st, 1 if ev.button == "wheel_down" else -1)
-        return
-    if ev.kind != "press" or ev.button != "left":
-        return
-    action = st.hits.lookup(ev.row, ev.col)
-    if not action:
-        return
-    if callable(action):
-        action()   # select_list integrated hit: click selects / opens
-        return
-    kind = action[0]
-    if kind == "view":
-        change_view(st, action[1])
-    elif kind == "open":
-        open_match(st, refresher, action[1])
-    elif kind == "scorers_tab":
-        st.scorers_tab = action[1]
-        st.scorers_sel = 0
-    elif kind == "detail_tab":
-        st.detail_tab = action[1]
+    def open_match(event_id):
+        """Jump to the match centre for an event id (Esc returns)."""
+        st.detail_event_id = event_id
+        st.detail_tab = 0
         st.detail_scroll = 0
-    elif kind == "sched_day":
-        d = S.resolve_date(("+" if action[1] > 0 else "-") + "1", st.schedule_date)
-        if d:
-            st.schedule_date = d
-            st.sched_sel = 0
-            refresher.request_schedule(d)
+        if app.view != S.DETAIL:
+            app.push(S.DETAIL)
+        refresher.request_summary(event_id)
 
+    def open_help():
+        if app.view != S.HELP:
+            app.push(S.HELP)
 
-def nav_vertical(st, delta):
-    if st.view == S.GROUPS:
-        st.groups_scroll = max(0, st.groups_scroll + (1 if delta > 0 else -1))
-    elif st.view == S.BRACKET:
-        st.bracket_scroll_y = max(0, st.bracket_scroll_y + delta * 2)
-    elif st.view == S.DETAIL:
-        st.detail_scroll = max(0, st.detail_scroll + (1 if delta > 0 else -1))
-    else:
-        move_selection(st, delta)
+    def refresh_now():
+        refresher.force_all()
+        app.toast("refreshing…", "info", 3)
 
-
-def nav_horizontal(st, delta, refresher):
-    if st.view == S.SCHEDULE:
+    def shift_day(delta):
         d = S.resolve_date(("+" if delta > 0 else "-") + "1", st.schedule_date)
         if d:
             st.schedule_date = d
-            st.sched_sel = 0
+            st.sched_ls.sel = 0
             refresher.request_schedule(d)
-    elif st.view == S.SCORERS:
+
+    def scorers_tab(delta):
         st.scorers_tab = (st.scorers_tab + delta) % 2
-        st.scorers_sel = 0
-    elif st.view == S.DETAIL:
+        st.scorers_ls.sel = 0
+
+    def detail_tab(delta):
         st.detail_tab = (st.detail_tab + delta) % len(views.DETAIL_TABS)
         st.detail_scroll = 0
-    elif st.view == S.BRACKET:
-        st.bracket_scroll_x = max(0, st.bracket_scroll_x + delta * 6)
-    elif st.view == S.GROUPS:
-        pass
+
+    def detail_scroll(d):
+        st.detail_scroll = max(0, st.detail_scroll + (1 if d > 0 else -1))
+
+    def groups_scroll(d):
+        st.groups_scroll = max(0, st.groups_scroll + (1 if d > 0 else -1))
+
+    def bracket_v(d):
+        st.bracket_scroll_y = max(0, st.bracket_scroll_y + d * 2)
+
+    def bracket_h(d):
+        st.bracket_scroll_x = max(0, st.bracket_scroll_x + d * 6)
+
+    def open_from(ls, items):
+        """Enter action for a list view: open its selected match."""
+        def go():
+            lst = items()
+            if lst:
+                open_match(lst[max(0, min(ls.sel, len(lst) - 1))].id)
+        return go
+
+    def sel_nav(ls, extra=None):
+        """The standard cursor keymap over a ListState."""
+        keys = {(Key.UP, "k"): lambda: ls.move(-1),
+                (Key.DOWN, "j"): lambda: ls.move(1),
+                Key.PGUP: lambda: ls.move(-5), Key.PGDN: lambda: ls.move(5),
+                Key.HOME: ls.home, Key.END: ls.end}
+        keys.update(extra or {})
+        return keys
+
+    def vert_nav(fn, pg=1, ends=1):
+        """Scroll-view keymap: vertical keys feed `fn` with a signed step."""
+        return {(Key.UP, "k"): lambda: fn(-1), (Key.DOWN, "j"): lambda: fn(1),
+                Key.PGUP: lambda: fn(-pg), Key.PGDN: lambda: fn(pg),
+                Key.HOME: lambda: fn(-ends), Key.END: lambda: fn(ends)}
+
+    def horiz_nav(fn):
+        return {(Key.LEFT, "h"): lambda: fn(-1), (Key.RIGHT, "l"): lambda: fn(1)}
+
+    def wheel(fn):
+        """Wheel = one vertical step; ignored while the palette is open
+        (the old loop dropped all mouse input in command mode)."""
+        def on_wheel(d):
+            if app.capture is None:
+                fn(d)
+        return on_wheel
+
+    sched_keys = horiz_nav(shift_day)
+    sched_keys[Key.ENTER] = open_from(st.sched_ls, lambda: st.schedule_matches)
+    bracket_keys = vert_nav(bracket_v, pg=5, ends=9999)
+    bracket_keys.update(horiz_nav(bracket_h))
+    detail_keys = vert_nav(detail_scroll)
+    detail_keys.update(horiz_nav(detail_tab))
+
+    app.add_view(S.LIVE, views.view_live,
+                 keys=sel_nav(st.live_ls, {Key.ENTER: open_from(
+                     st.live_ls, lambda: live_ordered(st))}),
+                 on_wheel=wheel(st.live_ls.move))
+    app.add_view(S.SCHEDULE, views.view_schedule,
+                 keys=sel_nav(st.sched_ls, sched_keys),
+                 on_wheel=wheel(st.sched_ls.move))
+    app.add_view(S.GROUPS, views.view_groups, keys=vert_nav(groups_scroll),
+                 on_wheel=wheel(groups_scroll))
+    app.add_view(S.BRACKET, views.view_bracket, keys=bracket_keys,
+                 on_wheel=wheel(bracket_v))
+    app.add_view(S.SCORERS, views.view_scorers,
+                 keys=sel_nav(st.scorers_ls, horiz_nav(scorers_tab)),
+                 on_wheel=wheel(st.scorers_ls.move))
+    app.add_view(S.DETAIL, views.view_detail, keys=detail_keys,
+                 on_wheel=wheel(detail_scroll))
+    app.add_view(S.TEAM, views.view_team,
+                 keys=sel_nav(st.sched_ls, {Key.ENTER: open_from(
+                     st.sched_ls, lambda: getattr(st, "team_matches", []))}),
+                 on_wheel=wheel(st.sched_ls.move))
+    app.add_view(S.HELP, views.view_help, on_wheel=lambda d: None)
+
+    pal = Palette(CommandSet(S.command_specs(st, app, refresher)),
+                  on_status=lambda msg: app.toast(msg, "info", 4))
+    app.palette = pal
+
+    binds = {("q", "Q"): app.quit,
+             (":", "/"): lambda: pal.open_(app),
+             "?": open_help,
+             ("r", "R"): refresh_now,
+             Key.TAB: lambda: cycle(1),
+             Key.SHIFT_TAB: lambda: cycle(-1)}
+    for i, v in enumerate(S.TAB_VIEWS):
+        binds[str(i + 1)] = lambda v=v: goto(v)
+    app.bind(binds)
+
+    # hooks for views.py's click closures
+    st.open_match = open_match
+    st.change_view = goto
+    st.sched_day = shift_day
+    return app
 
 
-def complete_command(st):
-    """Tab: fill the buffer with the currently-highlighted suggestion."""
-    title, sugg = S.command_completions(st, st.command_buf)
-    if not sugg:
-        return
-    sel = sugg[min(st.command_sel, len(sugg) - 1)]
-    st.command_buf = sel["text"]
-    st.command_sel = 0
-
-
-def move_command_sel(st, delta):
-    _, sugg = S.command_completions(st, st.command_buf)
-    n = len(sugg)
-    if n:
-        st.command_sel = (st.command_sel + delta) % n
-
-
-def handle_command_key(st, key, refresher):
-    if key == Key.ENTER:
-        cmd = st.command_buf
-        st.command_mode = False
-        st.command_buf = ""
-        st.command_sel = 0
-        res = S.run_command(st, cmd, refresher)
-        if res:
-            st.toast(res, "info", 4)
-    elif key == Key.ESC:
-        st.command_mode = False
-        st.command_buf = ""
-        st.command_sel = 0
-    elif key == Key.TAB:
-        complete_command(st)
-    elif key in (Key.UP, Key.SHIFT_TAB):
-        move_command_sel(st, -1)
-    elif key == Key.DOWN:
-        move_command_sel(st, 1)
-    elif key == Key.BACKSPACE:
-        st.command_buf = st.command_buf[:-1]
-        st.command_sel = 0
-    elif isinstance(key, str) and len(key) == 1 and key.isprintable():
-        st.command_buf += key
-        st.command_sel = 0
+def render_frame(app, cols, rows):
+    """One full frame (list of ANSI lines) without entering the terminal —
+    exactly what App.run paints; used by --snapshot and the golden tests."""
+    with app.lock:
+        app.frame += 1
+        app.hits.clear()
+        cv = Canvas(cols, rows, views.base())
+        views.draw_frame(cv.region(hits=app.hits), app)
+        return cv.to_lines()
 
 
 def initial_load(st, refresher):
@@ -334,6 +289,17 @@ def list_teams():
     print(f"\n{len(items)} teams.")
 
 
+def start_team(st, app, refresher, query):
+    """Resolve a team query and load its page synchronously for first paint."""
+    res = S.open_team(st, app, query, refresher)
+    if getattr(st, "team_abbr", None) and app.view == S.TEAM:
+        refresher._do_team(st.team_abbr, getattr(st, "team_query", ""), force=True)
+    else:
+        app.goto(S.LIVE)
+        app.toast(f"{res} — showing live scores", "error", 7)
+    return res
+
+
 def snapshot(opts):
     """Render one frame to stdout (for non-interactive validation)."""
     try:
@@ -342,35 +308,25 @@ def snapshot(opts):
     except ValueError:
         cols, rows = 120, 40
     st = S.AppState()
-    st.view = opts["view"]
     refresher = S.Refresher(st)
+    app = build_app(st, refresher)
+    app.goto(opts["view"])
     if opts["date"]:
         st.schedule_date = opts["date"]
     initial_load(st, refresher)
     if opts.get("team"):
-        start_team(st, refresher, opts["team"])
+        start_team(st, app, refresher, opts["team"])
     # synchronously load the active view's data
-    if st.view == S.SCHEDULE:
+    if app.view == S.SCHEDULE:
         refresher._do_schedule(st.schedule_date, force=True)
-    elif st.view == S.GROUPS:
+    elif app.view == S.GROUPS:
         refresher._do_standings(force=True)
-    elif st.view == S.BRACKET:
+    elif app.view == S.BRACKET:
         refresher._do_bracket(force=True)
-    elif st.view == S.SCORERS:
+    elif app.view == S.SCORERS:
         refresher._do_scorers(force=True)
-    lines = views.render(st, cols, rows)
+    lines = render_frame(app, cols, rows)
     sys.stdout.write("\n".join(lines) + term.RESET + "\n")
-
-
-def start_team(st, refresher, query):
-    """Resolve a team query and load its page synchronously for first paint."""
-    res = S.open_team(st, query, refresher)
-    if getattr(st, "team_abbr", None) and st.view == S.TEAM:
-        refresher._do_team(st.team_abbr, getattr(st, "team_query", ""), force=True)
-    else:
-        st.view = S.LIVE
-        st.toast(f"{res} — showing live scores", "error", 7)
-    return res
 
 
 def main():
@@ -389,54 +345,20 @@ def main():
         return
 
     st = S.AppState()
-    st.view = opts["view"]
     if opts["date"]:
         st.schedule_date = opts["date"]
     refresher = S.Refresher(st)
-    st.open_match = lambda eid: open_match(st, refresher, eid)
+    app = build_app(st, refresher)
+    app.goto(opts["view"])
     initial_load(st, refresher)
     if opts["team"]:
-        start_team(st, refresher, opts["team"])
+        start_team(st, app, refresher, opts["team"])
     refresher.start()
-    if st.view == S.SCHEDULE:
+    if app.view == S.SCHEDULE:
         refresher.request_schedule(st.schedule_date)
 
-    renderer = Renderer()
-    last_tick = 0.0
-    try:
-        with RawTerminal(mouse=True) as tw:
-            while st.running:
-                if tw.take_resize():
-                    renderer.reset()
-                    st.dirty = True
-                if tw.mouse != st.mouse_enabled:   # :mouse on|off
-                    tw.set_mouse(st.mouse_enabled)
-                key = read_key(timeout=0.12)
-                if key is not None:
-                    if isinstance(key, term.MouseEvent):
-                        if not st.command_mode and st.mouse_enabled:
-                            handle_mouse(st, key, refresher)
-                    elif st.command_mode:
-                        handle_command_key(st, key, refresher)
-                    else:
-                        handle_normal_key(st, key, refresher)
-                    refresher.wake()
-                    st.dirty = True
-                st.prune_toasts()
-                now = time.time()
-                # animate (clock, pulse, cursor) ~3x/sec
-                if now - last_tick >= 0.33:
-                    st.dirty = True
-                    last_tick = now
-                if st.dirty:
-                    size = term.terminal_size()
-                    lines = views.render(st, size[0], size[1])
-                    renderer.render(lines, size)
-                    st.dirty = False
-    except KeyboardInterrupt:
-        pass
-    finally:
-        st.running = False
+    app.run(views.draw_frame)
+    st.running = False
     print("⚽ thanks for watching — full time.")
 
 

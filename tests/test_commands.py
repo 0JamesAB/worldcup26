@@ -445,47 +445,38 @@ class TestDrawPaletteMenu(unittest.TestCase):
         self.assertNotEqual(base, other)
 
 
-class TestPortByteIdentity(unittest.TestCase):
-    """The drawing ports must emit the exact bytes the app draws today
-    when fed identical specs and the WorldCupTheme colors. Mirrors the
-    palette-open golden fixture (buf "gr", sel 0) at 120x40."""
+class TestWorldCupSpecs(unittest.TestCase):
+    """The World Cup command specs (state.command_specs) stay consumable
+    by CommandSet. Since the app's palette drawing now IS the kit's, the
+    byte gate lives in the palette-open view golden; this guards the
+    spec contract the golden rides on."""
 
-    def setUp(self):
-        self._depth = term.get_color_depth()
-        term.set_color_depth("truecolor")
-
-    def tearDown(self):
-        term.set_color_depth(self._depth)
-
-    def test_menu_and_bar_match_the_app(self):
+    def _specs(self):
         import state as S
-        import views
-        from palette import WorldCupTheme
+        return S.command_specs(S.AppState(), None, None)
 
-        views.STY.refresh()
-        st = S.AppState()
-        st.command_mode = True
-        st.command_buf = "gr"
-        st.command_sel = 0
-        cv_app = Canvas(120, 40)
-        root_app = cv_app.region()
-        views.draw_command_palette(root_app, st)
-        views.draw_statusline(root_app.rows(-2, -1), st)
+    def test_specs_have_the_kit_fields(self):
+        for c in self._specs():
+            for field in ("name", "aliases", "syntax", "desc",
+                          "run", "complete"):
+                self.assertIn(field, c, c.get("name"))
+            self.assertTrue(callable(c["run"]), c["name"])
 
-        specs = [{"name": c["name"], "aliases": c["aliases"],
-                  "syntax": c["syntax"], "desc": c["desc"],
-                  "run": lambda a: "", "complete": None}
-                 for c in S.COMMANDS]
-        pal = Palette(CommandSet(specs))
-        pal.edit.buf = "gr"
-        pal.edit.cursor = 2
-        pal.sel = 0
-        cv_kit = Canvas(120, 40)
-        root_kit = cv_kit.region()
-        draw_palette_menu(root_kit, pal, theme=WorldCupTheme)
-        draw_palette_bar(root_kit.rows(-2, -1), pal, theme=WorldCupTheme)
+    def test_arg_commands_are_marked_by_syntax_space(self):
+        # the kit derives "takes an argument" from a space in the syntax
+        args = {c["name"]: " " in c["syntax"] for c in self._specs()}
+        self.assertTrue(args["schedule"])
+        self.assertTrue(args["team"])
+        self.assertFalse(args["bracket"])
+        self.assertFalse(args["quit"])
 
-        self.assertEqual(cv_app.to_lines(), cv_kit.to_lines())
+    def test_menu_completion_matches_the_palette_golden(self):
+        # the palette-open golden types "gr": one suggestion, ':groups'
+        cs = CommandSet(self._specs())
+        title, sugg = cs.completions("gr")
+        self.assertEqual(title, "Commands")
+        self.assertEqual([s["text"] for s in sugg], ["groups "])
+        self.assertEqual(sugg[0]["label"], ":groups [A-L]")
 
 
 if __name__ == "__main__":

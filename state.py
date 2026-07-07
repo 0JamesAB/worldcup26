@@ -1,6 +1,6 @@
 """
-state.py - Application state, the command-line ("/" -> ":" vim-style) parser,
-and the background refresher thread that keeps live data flowing.
+state.py - Application state, the command registry feeding the tui command
+palette, and the background refresher thread that keeps live data flowing.
 """
 
 import threading
@@ -8,7 +8,8 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import espn
-from tui.interact import HitMap, ListState
+from tui.app import Toast, Toasts
+from tui.interact import ListState
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
@@ -31,32 +32,17 @@ def today_yyyymmdd():
     return datetime.now().astimezone().strftime("%Y%m%d")
 
 
-class Toast:
-    def __init__(self, text, kind="info", ttl=8.0):
-        self.text = text
-        self.kind = kind          # info | goal | error
-        self.born = time.time()
-        self.ttl = ttl
-
-    @property
-    def alive(self):
-        return (time.time() - self.born) < self.ttl
-
-    @property
-    def age(self):
-        return time.time() - self.born
-
-
 class AppState:
     def __init__(self):
         self.lock = threading.RLock()
-        self.hits = HitMap()   # clickable regions, rebuilt every rendered frame
-        self.mouse_enabled = True
-        self.view = LIVE
-        self.prev_view = LIVE
+        # The tui.app.App this state is wired to (installed by
+        # wc.build_app). Its view stack is the routing authority; the
+        # `view`/`dirty` properties below read through to it, and fall
+        # back to plain fields for standalone states (fixtures, tools).
+        self.app = None
+        self._view = LIVE
         self.running = True
-        self.dirty = True
-        self.frame = 0
+        self._dirty = True
 
         # data
         self.matches_today = []          # list[Match]
@@ -82,14 +68,8 @@ class AppState:
         self.detail_tab = 0              # 0 lineups, 1 timeline, 2 stats
         self.detail_scroll = 0
 
-        # command line
-        self.command_mode = False
-        self.command_buf = ""
-        self.command_result = ""
-        self.command_sel = 0
-
-        # toasts / notifications
-        self.toasts = []
+        # toasts / notifications (shared with app.toasts by wc.build_app)
+        self.toasts = Toasts(limit=6)
         self._signatures = {}            # event_id -> signature (goal detection)
         self._first_sig_pass = True
 
@@ -97,13 +77,45 @@ class AppState:
         self.status = "starting…"
         self.loading = set()
 
-        # navigation hook: wc.py installs a callable(event_id) that opens
-        # the match centre; select_list on_open closures route through it.
+        # navigation hooks: wc.py installs callables that views.py's
+        # click closures route through (opening the match centre,
+        # switching the active view, shifting the schedule day).
         self.open_match = None
+        self.change_view = None
+        self.sched_day = None
 
-    # -- int shims over the ListState cursors --
-    # wc.py's key handling still reads/writes plain ints this phase; the
-    # app-kit phase rewires it onto the ListStates directly.
+    # -- routing state, read through the attached App --
+
+    @property
+    def view(self):
+        """The active view name: top of the App's view stack once wired."""
+        app = self.app
+        if app is not None and app.stack:
+            return app.stack[-1]
+        return self._view
+
+    @view.setter
+    def view(self, v):
+        app = self.app
+        if app is not None:
+            app.goto(v)
+        else:
+            self._view = v
+
+    @property
+    def dirty(self):
+        app = self.app
+        return app.dirty if app is not None else self._dirty
+
+    @dirty.setter
+    def dirty(self, v):
+        app = self.app
+        if app is not None:
+            app.dirty = v
+        else:
+            self._dirty = v
+
+    # -- int shims over the ListState cursors (fixtures + tests) --
     @property
     def live_sel(self):
         return self.live_ls.sel
@@ -131,16 +143,8 @@ class AppState:
     # -- toast helpers --
     def toast(self, text, kind="info", ttl=8.0):
         with self.lock:
-            self.toasts.append(Toast(text, kind, ttl))
-            self.toasts = [t for t in self.toasts if t.alive][-6:]
+            self.toasts.add(text, kind, ttl)
             self.dirty = True
-
-    def prune_toasts(self):
-        with self.lock:
-            before = len(self.toasts)
-            self.toasts = [t for t in self.toasts if t.alive]
-            if len(self.toasts) != before:
-                self.dirty = True
 
     # -- goal detection on a fresh today/scoreboard fetch --
     def detect_goals(self, matches):
@@ -181,52 +185,8 @@ class AppState:
 
 
 # ----------------------------------------------------------------------------
-# Command line
+# Command registry (tui.commands specs)
 # ----------------------------------------------------------------------------
-
-# Command registry. `args` is one of: None, "date", "group", "team", "match".
-COMMANDS = [
-    {"name": "live", "aliases": ["l", "today", "scores"], "args": None,
-     "syntax": "live", "desc": "live / today's scores"},
-    {"name": "schedule", "aliases": ["sched", "s", "fixtures"], "args": "date",
-     "syntax": "schedule [date]", "desc": "browse fixtures by day"},
-    {"name": "date", "aliases": ["d", "goto"], "args": "date",
-     "syntax": "date <day>", "desc": "set the schedule date"},
-    {"name": "groups", "aliases": ["group", "g", "table", "standings"], "args": "group",
-     "syntax": "groups [A-L]", "desc": "group tables"},
-    {"name": "bracket", "aliases": ["b", "knockout", "ko"], "args": None,
-     "syntax": "bracket", "desc": "knockout bracket"},
-    {"name": "scorers", "aliases": ["scorer", "goals", "boot", "golden"], "args": None,
-     "syntax": "scorers", "desc": "golden boot leaderboard"},
-    {"name": "assists", "aliases": ["assist"], "args": None,
-     "syntax": "assists", "desc": "assist leaderboard"},
-    {"name": "team", "aliases": ["t", "nation"], "args": "team",
-     "syntax": "team <name|ABBR>", "desc": "a nation's results & fixtures"},
-    {"name": "match", "aliases": ["m", "game"], "args": "match",
-     "syntax": "match <id>", "desc": "open a match by event id"},
-    {"name": "refresh", "aliases": ["r", "reload"], "args": None,
-     "syntax": "refresh", "desc": "force a refresh now"},
-    {"name": "mouse", "aliases": [], "args": "onoff",
-     "syntax": "mouse [on|off]", "desc": "toggle mouse capture (off = native text selection)"},
-    {"name": "help", "aliases": ["h"], "args": None,
-     "syntax": "help", "desc": "keys & commands"},
-    {"name": "quit", "aliases": ["q", "exit"], "args": None,
-     "syntax": "quit", "desc": "exit"},
-]
-
-HELP_COMMANDS = [(":" + c["syntax"], c["desc"]) for c in COMMANDS]
-
-
-def find_command(tok):
-    tok = tok.lower()
-    for c in COMMANDS:
-        if tok == c["name"] or tok in c["aliases"]:
-            return c
-    # unique prefix match
-    hits = [c for c in COMMANDS
-            if c["name"].startswith(tok) or any(a.startswith(tok) for a in c["aliases"])]
-    return hits[0] if len(hits) == 1 else None
-
 
 def _unique_teams():
     colors = espn.fetch_team_colors()
@@ -237,73 +197,211 @@ def _unique_teams():
     return sorted(seen.items(), key=lambda kv: kv[1])
 
 
-def command_completions(st, buf):
-    """Return (title, suggestions) for the command palette.
+# -- completion providers: each returns a callable(arg) -> (title, rows) --
 
-    Each suggestion: {text, label, hint, kind}. `text` is the new command
-    buffer (without the leading ':') if accepted via Tab.
-    """
-    has_space = " " in buf
-    if not has_space:
-        prefix = buf.strip().lower()
-        out = []
-        for c in COMMANDS:
-            names = [c["name"]] + c["aliases"]
-            if prefix == "" or any(n.startswith(prefix) for n in names):
-                text = c["name"] + (" " if c["args"] else "")
-                out.append({"text": text, "label": ":" + c["syntax"],
-                            "hint": c["desc"], "kind": "cmd"})
-        return ("Commands", out)
-
-    toks = buf.split(" ", 1)
-    cmd = find_command(toks[0])
-    arg = (toks[1] if len(toks) > 1 else "").strip()
-    al = arg.lower()
-    if not cmd:
-        return ("?", [])
-    name = cmd["name"]
-
-    if cmd["args"] == "team":
+def _complete_team(name):
+    def complete(arg):
+        al = arg.lower()
         out = []
         for abbr, tname in _unique_teams():
             if al == "" or al in abbr.lower() or al in tname.lower():
                 out.append({"text": f"{name} {abbr}", "label": tname,
                             "hint": "--" + abbr, "kind": "arg"})
         return (f"Teams · {len(out)}", out[:9])
+    return complete
 
-    if cmd["args"] == "group":
+
+def _complete_group(st, name):
+    def complete(arg):
+        al = arg.lower()
         letters = [g.name.split()[-1] for g in st.standings] or list("ABCDEFGHIJKL")
         out = [{"text": f"{name} {L}", "label": f"Group {L}", "hint": "", "kind": "arg"}
                for L in letters if al == "" or L.lower().startswith(al)]
         return ("Groups", out)
+    return complete
 
-    if cmd["args"] == "date":
+
+def _complete_date(name):
+    def complete(arg):
+        al = arg.lower()
         opts = [("today", "today"), ("tomorrow", "+1 day"), ("yesterday", "-1 day"),
                 ("+1", "next day"), ("-1", "previous day"), ("+7", "in a week"),
                 ("20260703", "a specific YYYYMMDD")]
         out = [{"text": f"{name} {v}", "label": v, "hint": h, "kind": "arg"}
                for v, h in opts if al == "" or v.startswith(al)]
         return ("Date  (YYYYMMDD · today · +N · -N)", out)
+    return complete
 
-    if cmd["args"] == "match":
+
+def _complete_match(st, name):
+    def complete(arg):
+        al = arg.lower()
         out = []
-        pool = (st.matches_today or [])
-        for m in pool:
+        for m in (st.matches_today or []):
             lbl = f"{m.away.abbr if m.away else '?'} v {m.home.abbr if m.home else '?'}"
             if al == "" or m.id.startswith(arg):
                 out.append({"text": f"{name} {m.id}", "label": m.id,
                             "hint": lbl, "kind": "arg"})
         return ("Today's match ids", out[:9])
+    return complete
 
-    if cmd["args"] == "onoff":
+
+def _complete_onoff(name):
+    def complete(arg):
+        al = arg.lower()
         out = [{"text": f"{name} {v}", "label": v, "hint": h, "kind": "arg"}
                for v, h in (("on", "capture clicks & wheel"),
                             ("off", "native text selection"))
                if al == "" or v.startswith(al)]
         return ("Mouse", out)
+    return complete
 
-    return (cmd["syntax"], [{"text": buf, "label": ":" + cmd["syntax"],
-                            "hint": cmd["desc"], "kind": "info"}])
+
+def command_specs(st, app, refresher):
+    """Build the tui.commands spec list for one (state, app, refresher).
+
+    The run closures capture exactly what they need; completion comes
+    from the small providers above. Called with Nones only to read the
+    static fields (see HELP_COMMANDS) — no closure runs then.
+    """
+
+    def go(view):
+        app.goto(view)
+        refresher.wake()     # fetch the new view's data promptly
+
+    def run_live(arg):
+        go(LIVE)
+        return "live scores"
+
+    def run_schedule(arg):
+        if arg:
+            d = resolve_date(arg, st.schedule_date)
+            if d:
+                st.schedule_date = d
+        go(SCHEDULE)
+        refresher.request_schedule(st.schedule_date)
+        return f"schedule {st.schedule_date}"
+
+    def run_date(arg):
+        d = resolve_date(arg, st.schedule_date)
+        if not d:
+            return f"bad date: {arg}"
+        st.schedule_date = d
+        go(SCHEDULE)
+        refresher.request_schedule(d)
+        return f"date -> {d}"
+
+    def run_groups(arg):
+        go(GROUPS)
+        if arg:
+            letter = arg.split()[0].upper()
+            for i, gp in enumerate(st.standings):
+                if gp.name.upper().endswith(letter):
+                    st.groups_scroll = i
+                    break
+        return "group tables"
+
+    def run_bracket(arg):
+        go(BRACKET)
+        return "bracket"
+
+    def run_scorers(arg):
+        go(SCORERS)
+        st.scorers_tab = 0
+        return "top scorers"
+
+    def run_assists(arg):
+        go(SCORERS)
+        st.scorers_tab = 1
+        return "top assists"
+
+    def run_team(arg):
+        if not arg:
+            return "usage: :team <name>"
+        return open_team(st, app, arg, refresher)
+
+    def run_match(arg):
+        if not arg:
+            return "usage: :match <event id>"
+        eid = arg.split()[0]
+        st.detail_event_id = eid
+        st.detail_tab = 0
+        if st.view != DETAIL:
+            app.push(DETAIL)
+        refresher.request_summary(eid)
+        return f"match {eid}"
+
+    def run_mouse(arg):
+        arg = arg.lower()
+        if arg in ("on", "off"):
+            app.mouse_enabled = arg == "on"
+        elif not arg:
+            app.mouse_enabled = not app.mouse_enabled
+        else:
+            return "usage: :mouse [on|off]"
+        return "mouse " + ("on" if app.mouse_enabled
+                           else "off — native text selection restored")
+
+    def run_refresh(arg):
+        refresher.force_all()
+        return "refreshing…"
+
+    def run_help(arg):
+        if st.view != HELP:
+            app.push(HELP)
+        return "help"
+
+    def run_quit(arg):
+        st.running = False
+        app.quit()
+        return "bye"
+
+    return [
+        {"name": "live", "aliases": ["l", "today", "scores"],
+         "syntax": "live", "desc": "live / today's scores",
+         "run": run_live, "complete": None},
+        {"name": "schedule", "aliases": ["sched", "s", "fixtures"],
+         "syntax": "schedule [date]", "desc": "browse fixtures by day",
+         "run": run_schedule, "complete": _complete_date("schedule")},
+        {"name": "date", "aliases": ["d", "goto"],
+         "syntax": "date <day>", "desc": "set the schedule date",
+         "run": run_date, "complete": _complete_date("date")},
+        {"name": "groups", "aliases": ["group", "g", "table", "standings"],
+         "syntax": "groups [A-L]", "desc": "group tables",
+         "run": run_groups, "complete": _complete_group(st, "groups")},
+        {"name": "bracket", "aliases": ["b", "knockout", "ko"],
+         "syntax": "bracket", "desc": "knockout bracket",
+         "run": run_bracket, "complete": None},
+        {"name": "scorers", "aliases": ["scorer", "goals", "boot", "golden"],
+         "syntax": "scorers", "desc": "golden boot leaderboard",
+         "run": run_scorers, "complete": None},
+        {"name": "assists", "aliases": ["assist"],
+         "syntax": "assists", "desc": "assist leaderboard",
+         "run": run_assists, "complete": None},
+        {"name": "team", "aliases": ["t", "nation"],
+         "syntax": "team <name|ABBR>", "desc": "a nation's results & fixtures",
+         "run": run_team, "complete": _complete_team("team")},
+        {"name": "match", "aliases": ["m", "game"],
+         "syntax": "match <id>", "desc": "open a match by event id",
+         "run": run_match, "complete": _complete_match(st, "match")},
+        {"name": "refresh", "aliases": ["r", "reload"],
+         "syntax": "refresh", "desc": "force a refresh now",
+         "run": run_refresh, "complete": None},
+        {"name": "mouse", "aliases": [],
+         "syntax": "mouse [on|off]",
+         "desc": "toggle mouse capture (off = native text selection)",
+         "run": run_mouse, "complete": _complete_onoff("mouse")},
+        {"name": "help", "aliases": ["h", "?"],
+         "syntax": "help", "desc": "keys & commands",
+         "run": run_help, "complete": None},
+        {"name": "quit", "aliases": ["q", "exit"],
+         "syntax": "quit", "desc": "exit",
+         "run": run_quit, "complete": None},
+    ]
+
+
+HELP_COMMANDS = [(":" + c["syntax"], c["desc"])
+                 for c in command_specs(None, None, None)]
 
 
 def resolve_date(token, base=None):
@@ -325,97 +423,11 @@ def resolve_date(token, base=None):
     return None
 
 
-def run_command(state, raw, refresher):
-    """Execute a command-line command. Returns a status string."""
-    raw = raw.strip()
-    if raw.startswith(":"):
-        raw = raw[1:]
-    if not raw:
-        return ""
-    parts = raw.split()
-    cmd = parts[0].lower()
-    args = parts[1:]
-    arg = " ".join(args)
-
-    if cmd in ("q", "quit", "exit"):
-        state.running = False
-        return "bye"
-    if cmd in ("live", "l", "today", "scores"):
-        state.view = LIVE
-        return "live scores"
-    if cmd in ("schedule", "sched", "s", "fixtures"):
-        if args:
-            d = resolve_date(arg, state.schedule_date)
-            if d:
-                state.schedule_date = d
-        state.view = SCHEDULE
-        refresher.request_schedule(state.schedule_date)
-        return f"schedule {state.schedule_date}"
-    if cmd in ("date", "d", "goto"):
-        d = resolve_date(arg, state.schedule_date)
-        if not d:
-            return f"bad date: {arg}"
-        state.schedule_date = d
-        state.view = SCHEDULE
-        refresher.request_schedule(d)
-        return f"date -> {d}"
-    if cmd in ("groups", "group", "g", "table", "standings"):
-        state.view = GROUPS
-        if args:
-            letter = args[0].upper()
-            for i, gp in enumerate(state.standings):
-                if gp.name.upper().endswith(letter):
-                    state.groups_scroll = i
-                    break
-        return "group tables"
-    if cmd in ("bracket", "b", "knockout", "ko"):
-        state.view = BRACKET
-        return "bracket"
-    if cmd in ("scorers", "scorer", "goals", "boot", "golden"):
-        state.view = SCORERS
-        state.scorers_tab = 0
-        return "top scorers"
-    if cmd in ("assists", "assist"):
-        state.view = SCORERS
-        state.scorers_tab = 1
-        return "top assists"
-    if cmd in ("team", "t", "nation"):
-        if not arg:
-            return "usage: :team <name>"
-        return open_team(state, arg, refresher)
-    if cmd in ("match", "m", "game"):
-        if not arg:
-            return "usage: :match <event id>"
-        state.detail_event_id = args[0]
-        state.prev_view = state.view
-        state.view = DETAIL
-        state.detail_tab = 0
-        refresher.request_summary(args[0])
-        return f"match {args[0]}"
-    if cmd == "mouse":
-        if arg.lower() in ("on", "off"):
-            state.mouse_enabled = arg.lower() == "on"
-        elif not arg:
-            state.mouse_enabled = not state.mouse_enabled
-        else:
-            return "usage: :mouse [on|off]"
-        return "mouse " + ("on" if state.mouse_enabled else "off — native text selection restored")
-    if cmd in ("refresh", "r", "reload"):
-        refresher.force_all()
-        return "refreshing…"
-    if cmd in ("help", "h", "?"):
-        state.prev_view = state.view if state.view != HELP else state.prev_view
-        state.view = HELP
-        return "help"
-    return f"unknown: {cmd}  (try :help)"
-
-
-def open_team(state, query, refresher):
-    """Find a nation by name/abbr and open a team view."""
+def open_team(st, app, query, refresher):
+    """Find a nation by name/abbr and open its team page (pushed, so
+    Esc returns to wherever it was opened from)."""
     q = query.strip().lower()
     colors = espn.fetch_team_colors()
-    match_id = None
-    match_name = None
     best = None
     for k, rec in colors.items():
         name = (rec.get("name") or "")
@@ -430,10 +442,10 @@ def open_team(state, query, refresher):
             best = rec
     if not best:
         return f"no team: {query}"
-    state.team_query = best.get("name")
-    state.team_abbr = best.get("abbr")
-    state.prev_view = state.view if state.view not in (TEAM,) else state.prev_view
-    state.view = TEAM
+    st.team_query = best.get("name")
+    st.team_abbr = best.get("abbr")
+    if st.view != TEAM:
+        app.push(TEAM)
     refresher.request_team(best.get("abbr"), best.get("name"))
     return f"team {best.get('name')}"
 

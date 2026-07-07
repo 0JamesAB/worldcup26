@@ -33,7 +33,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
 import fixtures_views as F
-import views
+import wc
 
 COLS, ROWS = 120, 40
 WARMUPS = 5
@@ -59,12 +59,12 @@ VIEW_FIXTURES = [
 
 
 def view_scenario(build):
-    """One reusable fixture state; frame re-pinned so every render is equal."""
-    st = build()
+    """One reusable fixture app; frame re-pinned so every render is equal."""
+    app = F.make_app(build)
 
     def fn():
-        st.frame = F.FRAME  # render() increments it
-        views.render(st, COLS, ROWS)
+        app.frame = F.FRAME  # render_frame() increments it
+        wc.render_frame(app, COLS, ROWS)
     return fn
 
 

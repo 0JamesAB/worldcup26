@@ -1,9 +1,11 @@
 """
 views.py - All screen rendering for the World Cup TUI.
 
-render(state, cols, rows) -> list[str] (a full frame). Builds the chrome
-(header / tabs / status / footer) and dispatches to the active view, which
-draws onto a tui Canvas.
+draw_frame(root, app) paints a full frame onto the root Region (the
+App.run contract; app.state is the AppState). It builds the chrome
+(header / tabs / status / footer) and dispatches to the active view,
+looked up from the app's view registry. Mouse hits are registered as
+zero-arg closures routing through the AppState hooks wc.py installs.
 """
 
 import os
@@ -13,8 +15,8 @@ from datetime import datetime, timezone
 
 _FAR = datetime.max.replace(tzinfo=timezone.utc)
 
-from tui import term, widgets
-from tui.canvas import Canvas, LIGHT, HEAVY
+from tui import commands, term, widgets
+from tui.canvas import LIGHT, HEAVY
 from tui.term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
 import espn
 import state as S
@@ -255,11 +257,19 @@ def draw_header(bar, st, frame):
         bar.put(0, rx - term.display_width(chip), chip, STY.panel_faint)
 
 
+def _goto_view(st, view):
+    """Tab click action: switch views through the wc-installed hook."""
+    def go():
+        if st.change_view is not None:
+            st.change_view(view)
+    return go
+
+
 def draw_tabs(bar, st):
     active = S.TAB_VIEWS.index(st.view) if st.view in S.TAB_VIEWS else -1
     extents = bar.tab_bar(S.TABS, active, hint="  :help  ·  q quit")
     for i, (x, w) in enumerate(extents):
-        bar.hit(("view", S.TAB_VIEWS[i]), 0, x, 1, w)
+        bar.hit(_goto_view(st, S.TAB_VIEWS[i]), 0, x, 1, w)
 
 
 def draw_context(bar, st, label):
@@ -267,22 +277,11 @@ def draw_context(bar, st, label):
     bar.put(0, 2, label, fg(*P.dim) + ITALIC)
 
 
-def draw_statusline(bar, st):
-    bar.fill(bg(*P.bg1))
-    if st.command_mode:
-        prompt = ":" + st.command_buf
-        bar.put(0, 1, prompt, STY.panel_white_b)
-        x = 1 + term.display_width(prompt)
-        bar.put(0, x, "█", bg(*P.bg1) + fg(*P.accent))
-        # inline ghost completion of the highlighted suggestion
-        _, sugg = S.command_completions(st, st.command_buf)
-        if sugg:
-            t = sugg[min(st.command_sel, len(sugg) - 1)]["text"]
-            if t.startswith(st.command_buf) and len(t) > len(st.command_buf):
-                ghost = t[len(st.command_buf):]
-                bar.put(0, x + 1, term.strip_ansi(ghost), STY.panel_faint)
-                bar.put(0, x + 1 + term.display_width(ghost), "  ⇥ tab", STY.panel_faint)
+def draw_statusline(bar, st, pal=None):
+    if pal is not None and pal.open:
+        commands.draw_palette_bar(bar, pal, theme=P)
         return
+    bar.fill(bg(*P.bg1))
     # latest live toast
     alive = [t for t in st.toasts if t.alive]
     if alive:
@@ -305,51 +304,6 @@ def draw_statusline(bar, st):
         bar.right("⚠ reconnecting", bg(*P.bg1) + fg(*P.yellow), pad=1)
 
 
-def draw_command_palette(root, st):
-    """Floating command/argument suggestion menu above the ':' prompt."""
-    title, sugg = S.command_completions(st, st.command_buf)
-    if not sugg:
-        return
-    st.command_sel = max(0, min(st.command_sel, len(sugg) - 1))
-    status_row = root.h - 2
-    top_limit = 3  # don't cover header / tabs / context strip
-    maxshow = max(1, min(len(sugg), status_row - top_limit - 1, 10))
-    # keep the highlighted row within the visible window
-    win_start = 0
-    if st.command_sel >= maxshow:
-        win_start = st.command_sel - maxshow + 1
-    shown = sugg[win_start:win_start + maxshow]
-
-    def rw(s):
-        return term.display_width(s["label"]) + term.display_width(s["hint"]) + 8
-    w = min(root.w - 4, max(48, term.display_width(title) + 8, max(rw(s) for s in shown)))
-    h = len(shown) + 2
-    y0 = status_row - h
-    x0 = 1
-    root.box(y0, x0, h, w, style=fg(*P.accent2), chars=LIGHT, title=title,
-             title_style=fg(*P.gold) + BOLD, fill_style=bg(*P.bg2))
-    if len(sugg) > len(shown):
-        more = f"{st.command_sel + 1}/{len(sugg)}"
-        root.put(y0, x0 + w - term.display_width(more) - 2, more, bg(*P.bg2) + fg(*P.faint))
-    for i, s in enumerate(shown):
-        rr = y0 + 1 + i
-        sel = (win_start + i) == st.command_sel
-        if sel:
-            root.fill_rect(rr, x0 + 1, 1, w - 2, bg(*P.accent2))
-            root.put(rr, x0 + 1, " ▸ ", bg(*P.accent2) + fg(*P.bg0) + BOLD)
-            lblst = bg(*P.accent2) + fg(*P.bg0) + BOLD
-            hintst = bg(*P.accent2) + fg(*P.bg0)
-        else:
-            lblst = bg(*P.bg2) + fg(*P.text)
-            hintst = bg(*P.bg2) + fg(*P.dim)
-        root.put(rr, x0 + 4, s["label"], lblst, max_w=w - 10)
-        hint = s.get("hint", "")
-        if hint:
-            hx = x0 + w - term.display_width(hint) - 2
-            if hx > x0 + 4 + term.display_width(s["label"]) + 1:
-                root.put(rr, hx, term.strip_ansi(hint), hintst)
-
-
 def footer_right(st):
     """A useful, dynamic right-hand status: a live score, else next kickoff."""
     live = [m for m in st.matches_today if m.is_live]
@@ -369,8 +323,8 @@ def footer_right(st):
     return ""
 
 
-def draw_footer(bar, st):
-    if st.command_mode:
+def draw_footer(bar, st, pal=None):
+    if pal is not None and pal.open:
         hints = [("⇥", "complete"), ("↑↓", "select"), ("↵", "run"), ("esc", "cancel")]
         widgets.footer(bar, 0, 0, bar.w, hints, right="")
         return
@@ -512,6 +466,22 @@ def _on_open(st):
     return open_
 
 
+def _open_match(st, event_id):
+    """Click action for a match box: open its match centre."""
+    def go():
+        if st.open_match is not None:
+            st.open_match(event_id)
+    return go
+
+
+def _sched_day(st, delta):
+    """Click action for the schedule date arrows."""
+    def go():
+        if st.sched_day is not None:
+            st.sched_day(delta)
+    return go
+
+
 def view_live(rg, st, frame):
     """Today's match cards. `rg` includes the context row (local row 0) so
     the overflow counter can sit there; cards fill the body below it."""
@@ -554,8 +524,8 @@ def view_schedule(rg, st, frame):
     nav = f"◂  {dstr}  ▸"
     nx = rg.center(nav, fg(*P.text) + BOLD, pad=2)
     nw = term.display_width(nav)
-    rg.hit(("sched_day", -1), 0, nx - 1, 1, 3)
-    rg.hit(("sched_day", 1), 0, nx + nw - 2, 1, 3)
+    rg.hit(_sched_day(st, -1), 0, nx - 1, 1, 3)
+    rg.hit(_sched_day(st, 1), 0, nx + nw - 2, 1, 3)
     if st.schedule_label:
         rg.put(0, 2, st.schedule_label, fg(*P.gold))
     if "schedule" in st.loading:
@@ -654,7 +624,7 @@ def view_bracket(rg, st, frame):
     for cy, cx, m in cells:
         if not m:
             continue
-        body.hit(("open", m.id), r=(cy - 1) - oy, c=cx - ox, h=4, w=CELL_W)
+        body.hit(_open_match(st, m.id), r=(cy - 1) - oy, c=cx - ox, h=4, w=CELL_W)
     # scroll position indicator on the context strip area (row 2 handled elsewhere)
     if big.h > vh:
         pct = int(100 * oy / max(1, big.h - vh))
@@ -799,6 +769,14 @@ def draw_bracket_cell(cv, cy, cx, m, frame):
             cv.put(rr, cx + w - 1, "‹", inner + fg(*P.gold))
 
 
+def _scorers_tab(st, i):
+    """Click action for a scorers board tab."""
+    def go():
+        st.scorers_tab = i
+        st.scorers_ls.sel = 0
+    return go
+
+
 def view_scorers(rg, st, frame):
     tabs = [("Goals", "goals"), ("Assists", "assists")]
     x = 2
@@ -808,7 +786,7 @@ def view_scorers(rg, st, frame):
         icon = "⚽ " if i == 0 else "🅰 "
         rg.put(0, x, f" {icon}{lbl} ", stl)
         tw = term.display_width(f" {icon}{lbl} ")
-        rg.hit(("scorers_tab", i), 0, x, 1, tw)
+        rg.hit(_scorers_tab(st, i), 0, x, 1, tw)
         x += tw + 1
     rg.put(0, rg.w - 18, "←→ switch board", fg(*P.faint))
     rg.hline(1, 2, rg.w - 4, fg(*P.line))
@@ -847,6 +825,14 @@ def view_scorers(rg, st, frame):
 DETAIL_TABS = ["Lineups", "Timeline", "Stats"]
 
 
+def _detail_tab(st, i):
+    """Click action for a match-centre tab."""
+    def go():
+        st.detail_tab = i
+        st.detail_scroll = 0
+    return go
+
+
 def view_detail(rg, st, frame):
     """Match centre. `rg` spans the body rows below the context strip."""
     eid = st.detail_event_id
@@ -865,7 +851,7 @@ def view_detail(rg, st, frame):
         on = i == st.detail_tab
         stl = (bg(*P.accent) + fg(*P.bg0) + BOLD) if on else STY.panel_dim
         rg.put(4, x, f" {lbl} ", stl)
-        rg.hit(("detail_tab", i), 4, x, 1, term.display_width(lbl) + 2)
+        rg.hit(_detail_tab(st, i), 4, x, 1, term.display_width(lbl) + 2)
         x += term.display_width(lbl) + 3
     rg.put(4, rg.w - 16, "←→ tabs · esc back", fg(*P.faint))
     rg.hline(5, 2, rg.w - 4, fg(*P.line))
@@ -1253,43 +1239,33 @@ def context_label(st):
 # top-level render
 # ----------------------------------------------------------------------------
 
-def render(state, cols, rows):
-    st = state
+def draw_frame(root, app):
+    """Paint one full frame onto `root` (the App.run frame callback).
+
+    The active view's renderer comes from the app's view registry (all
+    eight are registered by wc.build_app with signature (rg, st, frame));
+    the chrome and the palette overlay are drawn here. App.run holds
+    app.lock and clears the HitMap around this call.
+    """
+    st = app.state
     STY.refresh()
-    cv = Canvas(cols, rows, base())
-    with st.lock:
-        st.frame += 1
-        frame = st.frame
-        st.hits.clear()   # clickable regions track exactly this frame
-        root = cv.region(hits=st.hits)
-        draw_header(root.rows(0, 1), st, frame)
-        draw_tabs(root.rows(1, 2), st)
-        draw_context(root.rows(2, 3), st, context_label(st))
-        top = 3
-        bottom = rows - 3
-        if bottom - top < 3:
-            cv.put(rows // 2, 2, "terminal too small", fg(*P.red))
-        else:
-            body = root.rows(top, -2)   # rows [top .. bottom] of the screen
-            v = st.view
-            if v == S.LIVE:
-                view_live(root.rows(top - 1, -2), st, frame)
-            elif v == S.SCHEDULE:
-                view_schedule(body, st, frame)
-            elif v == S.GROUPS:
-                view_groups(body, st, frame)
-            elif v == S.BRACKET:
-                view_bracket(body, st, frame)
-            elif v == S.SCORERS:
-                view_scorers(body, st, frame)
-            elif v == S.DETAIL:
-                view_detail(body, st, frame)
-            elif v == S.TEAM:
-                view_team(body, st, frame)
-            elif v == S.HELP:
-                view_help(body, st, frame)
-        if st.command_mode:
-            draw_command_palette(root, st)
-        draw_statusline(root.rows(-2, -1), st)
-        draw_footer(root.rows(-1), st)
-    return cv.to_lines()
+    frame = app.frame
+    pal = app.palette
+    draw_header(root.rows(0, 1), st, frame)
+    draw_tabs(root.rows(1, 2), st)
+    draw_context(root.rows(2, 3), st, context_label(st))
+    top = 3
+    bottom = root.h - 3
+    if bottom - top < 3:
+        root.put(root.h // 2, 2, "terminal too small", fg(*P.red))
+    else:
+        v = st.view
+        # live includes the context row so its counter can sit there
+        body = root.rows(top - 1, -2) if v == S.LIVE else root.rows(top, -2)
+        view = app.views.get(v)
+        if view is not None:
+            view.render(body, st, frame)
+    if pal.open:
+        commands.draw_palette_menu(root, pal, theme=P)
+    draw_statusline(root.rows(-2, -1), st, pal)
+    draw_footer(root.rows(-1), st, pal)

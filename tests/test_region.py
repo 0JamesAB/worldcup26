@@ -958,9 +958,10 @@ class TestSelectListMatchesViewLive(unittest.TestCase):
                     key = (cols, rows, sel)
                     st = F.state_live()
                     st.live_sel = sel
+                    hits = HitMap()
                     cv = Canvas(cols, rows)
-                    # exactly render()'s view_live rect: rows [2, rows-2)
-                    views.view_live(cv.region(hits=st.hits).rows(2, -2),
+                    # exactly draw_frame()'s view_live rect: rows [2, rows-2)
+                    views.view_live(cv.region(hits=hits).rows(2, -2),
                                     st, F.FRAME + 1)
                     # visible card index -> absolute top row, via its hit:
                     # the actions are select_list click closures, so invoke
@@ -968,7 +969,7 @@ class TestSelectListMatchesViewLive(unittest.TestCase):
                     seen = {}
                     for y in range(rows):
                         for x in range(cols):
-                            a = st.hits.lookup(y, x)
+                            a = hits.lookup(y, x)
                             if a is not None:
                                 a()
                                 i = st.live_ls.sel

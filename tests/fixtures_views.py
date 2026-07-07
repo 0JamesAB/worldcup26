@@ -85,6 +85,27 @@ def freeze_environment():
     install_team_colors()
 
 
+def make_app(build):
+    """The real wc.py app wired around a fixture state (never run).
+
+    Renders go through wc.render_frame, so goldens exercise the actual
+    App wiring. The fixture's declarative palette fields (command_mode /
+    command_buf / command_sel) are transferred into the kit Palette; the
+    fixture's pinned frame number carries over (render_frame increments,
+    like the old views.render did)."""
+    import wc
+    st = build()
+    app = wc.build_app(st, S.Refresher(st))   # refresher never started
+    app.goto(st.view)
+    if getattr(st, "command_mode", False):
+        app.palette.open_(app)
+        app.palette.edit.buf = st.command_buf
+        app.palette.edit.cursor = len(st.command_buf)
+        app.palette.sel = st.command_sel
+    app.frame = getattr(st, "frame", 0)
+    return app
+
+
 # ----------------------------------------------------------------------------
 # raw ESPN-shaped dict builders
 # ----------------------------------------------------------------------------
@@ -206,13 +227,20 @@ def _today_matches():
     return [m_pens, m_ft, m_live, m_ht, m_pre]
 
 
+def _toasts(*items):
+    """A real kit Toasts store pre-seeded with fixture toasts."""
+    ts = S.Toasts(limit=6)
+    ts._items = list(items)
+    return ts
+
+
 def _base_state(view):
     freeze_environment()
     st = S.AppState()
     st.view = view
     st.frame = FRAME
     st.status = "updated 12:00:00"
-    st.toasts = []
+    st.toasts = _toasts()
     st.matches_today = _today_matches()
     st.today_label = "Group Stage"
     for m in st.matches_today:
@@ -229,7 +257,7 @@ def state_live():
     st.live_sel = 0
     t = S.Toast("⚽ GOAL!  ARG 1 - 2 BRA", kind="goal", ttl=1e12)
     t.born = 0.0  # age > 1.2 forever: alive, never in the flash window
-    st.toasts = [t]
+    st.toasts = _toasts(t)
     return st
 
 
@@ -270,7 +298,7 @@ class _FrozenToast(S.Toast):
 
 def _toast_state(text, kind, age):
     st = _base_state(S.LIVE)
-    st.toasts = [_FrozenToast(text, kind, age)]
+    st.toasts = _toasts(_FrozenToast(text, kind, age))
     return st
 
 

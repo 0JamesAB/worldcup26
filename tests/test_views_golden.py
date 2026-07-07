@@ -25,7 +25,7 @@ from tui import theme as tui_theme
 from tui.testing import first_diff, mask_text
 
 import fixtures_views as F
-import views
+import wc
 
 
 GOLDEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "goldens")
@@ -104,10 +104,10 @@ def tearDownModule():
 
 
 def render_frame(build, cols, rows):
-    """One masked full-ANSI frame from a fresh fixture state."""
-    st = build()
-    st.frame = F.FRAME  # render() increments; fresh state keeps it constant
-    lines = views.render(st, cols, rows)
+    """One masked full-ANSI frame from a fresh fixture state, rendered
+    through the real wc app wiring (build_app + render_frame)."""
+    app = F.make_app(build)
+    lines = wc.render_frame(app, cols, rows)
     return mask_text("\n".join(lines), CLOCK_MASK)
 
 
