@@ -195,16 +195,17 @@ class Canvas:
                         # source window or the destination clip
                         ch = " "
                         cont = False
-                elif ch and term.char_width(ch) == 2:
-                    # will the continuation cell actually be written?
-                    will_cont = (x + 1 < xb and srow[x + 1].cont
-                                 and tx + 1 < x1)
-                    if not will_cont and (tx + 1 < x1 or x1 < self.w):
-                        # continuation lost at an interior edge (dest clip,
-                        # source window, or a legacy source-edge lead):
-                        # repair to a space. At the destination canvas edge
-                        # keep the legacy lead-only write, matching put().
-                        ch = " "
+                elif ((x + 1 >= xb or tx + 1 >= x1)
+                      and (tx + 1 < x1 or x1 < self.w)
+                      and ch and term.char_width(ch) == 2):
+                    # a wide lead at a window/clip edge whose continuation
+                    # will not be written (dest clip, source window, or a
+                    # legacy source-edge lead): repair to a space. In the
+                    # interior a lead's continuation is always copied too,
+                    # so only edge cells need the char_width check. At the
+                    # destination canvas edge keep the legacy lead-only
+                    # write, matching put().
+                    ch = " "
                 dst = drow[tx]
                 dst.ch = ch
                 dst.style = src.style
