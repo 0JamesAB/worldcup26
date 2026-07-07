@@ -555,8 +555,8 @@ def view_groups(rg, st, frame):
     gh = 7  # title + sep + header + 4 rows
     rows_per_screen = rg.h // gh
     total_rows = (len(groups) + ncols - 1) // ncols
-    st.groups_scroll = max(0, min(st.groups_scroll, max(0, total_rows - rows_per_screen)))
-    skip = st.groups_scroll * ncols
+    st.groups_ss.set_extent(total_rows, rows_per_screen)
+    skip = st.groups_ss.offset * ncols
     r = 0
     idx = skip
     while idx < len(groups) and r + gh - 1 <= rg.h:
@@ -567,7 +567,7 @@ def view_groups(rg, st, frame):
             idx += 1
         r += gh
     if total_rows > rows_per_screen:
-        rg.put(rg.h - 1, rg.w - 22, f"↑↓ scroll  {st.groups_scroll+1}/{max(1,total_rows-rows_per_screen+1)}",
+        rg.put(rg.h - 1, rg.w - 22, f"↑↓ scroll  {st.groups_ss.offset+1}/{max(1,total_rows-rows_per_screen+1)}",
                fg(*P.faint))
 
 
@@ -616,9 +616,9 @@ def view_bracket(rg, st, frame):
     big, cells = build_bracket_canvas(br, frame)
     body = rg.cols(2)   # viewport onto the oversized bracket canvas
     vh, vw = body.h, body.w
-    st.bracket_scroll_y = max(0, min(st.bracket_scroll_y, max(0, big.h - vh)))
-    st.bracket_scroll_x = max(0, min(st.bracket_scroll_x, max(0, big.w - vw)))
-    oy, ox = st.bracket_scroll_y, st.bracket_scroll_x
+    st.bracket_ss_y.set_extent(big.h, vh)
+    st.bracket_ss_x.set_extent(big.w, vw)
+    oy, ox = st.bracket_ss_y.offset, st.bracket_ss_x.offset
     body.blit(big, src_r=oy, src_c=ox)
     # register the visible slice of each match box as clickable
     for cy, cx, m in cells:
@@ -829,7 +829,7 @@ def _detail_tab(st, i):
     """Click action for a match-centre tab."""
     def go():
         st.detail_tab = i
-        st.detail_scroll = 0
+        st.detail_ss.home()
     return go
 
 
@@ -1048,9 +1048,9 @@ def draw_timeline(rg, m, detail, st):
     if m and m.away:
         rg.put(0, spine - 6 - term.display_width(m.away.name), m.away.name,
                fg_hex(team_hex(m.away.id, m.away.abbr)) + BOLD)
-    st.detail_scroll = max(0, min(st.detail_scroll, max(0, len(events) - (rg.h - 1))))
+    st.detail_ss.set_extent(len(events), rg.h - 1)
     r = 1
-    for e in events[st.detail_scroll:]:
+    for e in events[st.detail_ss.offset:]:
         if r >= rg.h:
             break
         icon, istyle = event_icon(e)
@@ -1177,8 +1177,12 @@ def view_help(rg, st, frame):
     bw = min(72, rg.w - 6)
     bx = (rg.w - bw) // 2
     bh = min(rg.h, 26)
-    inner = rg.box(0, bx, bh, bw, style=fg(*P.accent), chars=HEAVY, title="HELP",
-                   title_style=fg(*P.gold) + BOLD, fill_style=bg(*P.bg1))
+    # popup, not modal: the box is top-anchored (r=0), while modal would
+    # center it vertically (row 4 at 120x40) and change the pixels. popup
+    # adds the click-swallowing hit so clicks can't fall through Help.
+    inner = rg.popup(0, bx, bh, bw, style=fg(*P.accent), chars=HEAVY,
+                     title="HELP", title_style=fg(*P.gold) + BOLD,
+                     fill_style=bg(*P.bg1))
     r = 0
     inner.put(r, 1, "KEYBOARD", bg(*P.bg1) + fg(*P.accent) + BOLD); r += 1
     keys = [

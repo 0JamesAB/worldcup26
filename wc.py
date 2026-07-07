@@ -65,7 +65,7 @@ def build_app(st, refresher):
         """Jump to the match centre for an event id (Esc returns)."""
         st.detail_event_id = event_id
         st.detail_tab = 0
-        st.detail_scroll = 0
+        st.detail_ss.home()
         if app.view != S.DETAIL:
             app.push(S.DETAIL)
         refresher.request_summary(event_id)
@@ -91,19 +91,21 @@ def build_app(st, refresher):
 
     def detail_tab(delta):
         st.detail_tab = (st.detail_tab + delta) % len(views.DETAIL_TABS)
-        st.detail_scroll = 0
+        st.detail_ss.home()
 
+    # Scroll keymaps feed the ScrollStates; each view's render keeps the
+    # extents current via set_extent, so scroll() clamps at both ends.
     def detail_scroll(d):
-        st.detail_scroll = max(0, st.detail_scroll + (1 if d > 0 else -1))
+        st.detail_ss.scroll(1 if d > 0 else -1)
 
     def groups_scroll(d):
-        st.groups_scroll = max(0, st.groups_scroll + (1 if d > 0 else -1))
+        st.groups_ss.scroll(1 if d > 0 else -1)
 
     def bracket_v(d):
-        st.bracket_scroll_y = max(0, st.bracket_scroll_y + d * 2)
+        st.bracket_ss_y.scroll(d * 2)
 
     def bracket_h(d):
-        st.bracket_scroll_x = max(0, st.bracket_scroll_x + d * 6)
+        st.bracket_ss_x.scroll(d * 6)
 
     def open_from(ls, items):
         """Enter action for a list view: open its selected match."""

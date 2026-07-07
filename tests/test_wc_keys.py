@@ -177,6 +177,22 @@ class TestMouse(unittest.TestCase):
         self.assertEqual(app.view, S.DETAIL)    # second click opens
         self.assertEqual(st.detail_event_id, "9002")
 
+    def test_help_swallows_clicks_over_the_live_list(self):
+        """With Help open, the popup's swallow hit covers the box: a click
+        on coordinates that select a live card when Live is on top must
+        neither change the selection nor leave the Help view."""
+        st, app, _ = make_app()
+        wc.render_frame(app, 120, 40)
+        app.dispatch_key("?")
+        self.assertEqual(app.view, S.HELP)
+        wc.render_frame(app, 120, 40)           # hits rebuilt per frame
+        # (8, 60) is inside the help box AND over the second live card
+        # (see test_click_selects_then_opens); the swallow hit is present
+        self.assertTrue(callable(app.hits.lookup(8, 60)))
+        app.dispatch_mouse(MouseEvent(8, 60, "left", "press"))
+        self.assertEqual(st.live_ls.sel, 0)     # selection unchanged
+        self.assertEqual(app.view, S.HELP)      # still on help
+
     def test_click_on_a_tab_switches_view(self):
         st, app, _ = make_app()
         wc.render_frame(app, 120, 40)

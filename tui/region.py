@@ -433,15 +433,16 @@ class Region:
         return (start, stop)
 
     def popup(self, r, c, h, w, title="", style="", fill_style=None,
-              chars=None):
+              chars=None, title_style=None):
         """Overlay box at local (r, c): border, opaque fill, and a
         click-swallowing hit over the whole rect so hits drawn under
         the overlay are dead. fill_style defaults to region.style,
-        chars to LIGHT. Content hits registered afterwards (inside the
-        returned inner Region) win the overlap. Returns the inner
-        content Region."""
+        chars to LIGHT, title_style to the border style (as in box).
+        Content hits registered afterwards (inside the returned inner
+        Region) win the overlap. Returns the inner content Region."""
         inner = self.box(r, c, h, w, style=style,
                          chars=LIGHT if chars is None else chars, title=title,
+                         title_style=title_style,
                          fill_style=(self.style if fill_style is None
                                      else _sty(fill_style)))
         if self.hits is not None:

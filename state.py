@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import espn
 from tui.app import Toast, Toasts
-from tui.interact import ListState
+from tui.interact import ListState, ScrollState
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
@@ -60,13 +60,13 @@ class AppState:
         self.live_ls = ListState()
         self.sched_ls = ListState()      # schedule and team share the cursor
         self.scorers_ls = ListState()
-        self.groups_scroll = 0
-        self.bracket_scroll_x = 0
-        self.bracket_scroll_y = 0
+        self.groups_ss = ScrollState()
+        self.bracket_ss_x = ScrollState()
+        self.bracket_ss_y = ScrollState()
         self.scorers_tab = 0             # 0 goals, 1 assists
         self.detail_event_id = None
         self.detail_tab = 0              # 0 lineups, 1 timeline, 2 stats
-        self.detail_scroll = 0
+        self.detail_ss = ScrollState()
 
         # toasts / notifications (shared with app.toasts by wc.build_app)
         self.toasts = Toasts(limit=6)
@@ -139,6 +139,41 @@ class AppState:
     @scorers_sel.setter
     def scorers_sel(self, v):
         self.scorers_ls.sel = v
+
+    # -- int shims over the ScrollState offsets (fixtures + tests) --
+    # Raw offset reads/writes, exactly like the old plain-int fields:
+    # each view's render clamps via set_extent (overshoot stays until then).
+    @property
+    def groups_scroll(self):
+        return self.groups_ss.offset
+
+    @groups_scroll.setter
+    def groups_scroll(self, v):
+        self.groups_ss.offset = v
+
+    @property
+    def bracket_scroll_x(self):
+        return self.bracket_ss_x.offset
+
+    @bracket_scroll_x.setter
+    def bracket_scroll_x(self, v):
+        self.bracket_ss_x.offset = v
+
+    @property
+    def bracket_scroll_y(self):
+        return self.bracket_ss_y.offset
+
+    @bracket_scroll_y.setter
+    def bracket_scroll_y(self, v):
+        self.bracket_ss_y.offset = v
+
+    @property
+    def detail_scroll(self):
+        return self.detail_ss.offset
+
+    @detail_scroll.setter
+    def detail_scroll(self, v):
+        self.detail_ss.offset = v
 
     # -- toast helpers --
     def toast(self, text, kind="info", ttl=8.0):
@@ -297,7 +332,7 @@ def command_specs(st, app, refresher):
             letter = arg.split()[0].upper()
             for i, gp in enumerate(st.standings):
                 if gp.name.upper().endswith(letter):
-                    st.groups_scroll = i
+                    st.groups_ss.offset = i
                     break
         return "group tables"
 
