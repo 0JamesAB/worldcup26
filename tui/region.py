@@ -365,7 +365,7 @@ class Region:
     # -- interaction-integrated widgets (clip + hits + state together) ----------
 
     def select_list(self, items, state, draw_item, item_h=1, on_open=None,
-                    counter=None):
+                    counter=None, hit_h=None):
         """Windowed selectable list with integrated click handling.
 
         `state` is an interact.ListState; its count is synced to
@@ -379,10 +379,12 @@ class Region:
         clip later items. For uniform item_h this degrades to the
         simple bottom-anchored window. Every visible item registers a
         click hit: clicking selects it, and clicking the already
-        selected item calls on_open(item, i) when given. When items
-        overflow, counter(start, stop, count) is called so the caller
-        can draw its own indicator. Returns the visible (start, stop)
-        slice.
+        selected item calls on_open(item, i) when given; hit_h (int or
+        callable like item_h) trims the clickable rows when an item's
+        layout height includes non-content rows such as a trailing gap.
+        When items overflow, counter(start, stop, count) is called so
+        the caller can draw its own indicator. Returns the visible
+        (start, stop) slice.
         """
         count = len(items)
         state.set_count(count)
@@ -413,12 +415,17 @@ class Region:
             draw_item(item_rg, items[i], i, i == sel)
 
             if self.hits is not None:
+                if hit_h is None:
+                    hr = rows_i
+                else:
+                    hr = hit_h(items[i]) if callable(hit_h) else hit_h
+
                 def click(i=i, item=items[i]):
                     if i == state.sel and on_open is not None:
                         on_open(item, i)
                     state.sel = i
 
-                item_rg.hit(click)
+                item_rg.hit(click, h=min(hr, rows_i))
             r += rows_i
             stop = i + 1
         if counter is not None and stop - start < count:

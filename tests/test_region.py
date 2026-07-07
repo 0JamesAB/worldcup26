@@ -1172,3 +1172,35 @@ class TestInput(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSelectListHitH(unittest.TestCase):
+    """Regression: hit_h trims clickable rows (e.g. a trailing gap row
+    in an item's layout height must not be clickable)."""
+
+    def test_gap_row_not_clickable(self):
+        from tui.canvas import Canvas
+        from tui.interact import HitMap, ListState
+        cv = Canvas(20, 12)
+        hits = HitMap()
+        rg = cv.region(hits=hits)
+        state = ListState(3)
+        opened = []
+        rg.select_list(list("abc"), state, lambda irg, it, i, sel: None,
+                       item_h=4, hit_h=3,
+                       on_open=lambda it, i: opened.append(i))
+        # content rows of item 0 are clickable
+        self.assertIsNotNone(hits.lookup(2, 5))
+        # its gap row (row 3) is not
+        self.assertIsNone(hits.lookup(3, 5))
+        # second item's content starts at row 4
+        act = hits.lookup(4, 5)
+        self.assertIsNotNone(act)
+        act()                          # click selects item 1
+        self.assertEqual(state.sel, 1)
+        hits.clear()
+        rg.select_list(list("abc"), state, lambda irg, it, i, sel: None,
+                       item_h=4, hit_h=3,
+                       on_open=lambda it, i: opened.append(i))
+        hits.lookup(4, 5)()            # click selected -> opens
+        self.assertEqual(opened, [1])

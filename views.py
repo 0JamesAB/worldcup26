@@ -539,7 +539,8 @@ def view_live(rg, st, frame):
     # Cards vary in height (pre-match cards carry odds bars); select_list's
     # run-fit windowing advances the start index until the selection fits.
     body.select_list(matches, st.live_ls, draw_card_item, item_h=card_rows,
-                     on_open=_on_open(st), counter=counter)
+                     on_open=_on_open(st), counter=counter,
+                     hit_h=lambda m: card_rows(m) - 1)  # exclude the gap row
 
 
 def view_schedule(rg, st, frame):
