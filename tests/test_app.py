@@ -646,3 +646,72 @@ class AppRunCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCaptureDropsAllMouse(unittest.TestCase):
+    """Regression: wheel events must not bypass an active capture."""
+
+    def _app(self):
+        from tui.app import App
+        app = App()
+        self.wheeled = []
+        app.add_view("v", lambda rg, a: None,
+                      on_wheel=lambda d: self.wheeled.append(d))
+        app.goto("v")
+        return app
+
+    def _wheel(self):
+        from tui.term import MouseEvent
+        ev = MouseEvent.__new__(MouseEvent)
+        ev.row, ev.col, ev.button, ev.kind = 3, 3, "wheel_down", "wheel"
+        return ev
+
+    def test_wheel_dropped_under_capture(self):
+        app = self._app()
+        app.capture = lambda key: True
+        self.assertFalse(app.dispatch_mouse(self._wheel()))
+        self.assertEqual(self.wheeled, [])
+
+    def test_wheel_flows_without_capture(self):
+        app = self._app()
+        self.assertTrue(app.dispatch_mouse(self._wheel()))
+        self.assertEqual(self.wheeled, [1])
+
+    def test_wheel_synthesis_not_fed_to_capture(self):
+        # no on_wheel + capture: nothing reaches dispatch_key either
+        from tui.app import App
+        app = App()
+        seen = []
+        app.add_view("v", lambda rg, a: None)
+        app.goto("v")
+        app.capture = lambda key: seen.append(key) or True
+        self.assertFalse(app.dispatch_mouse(self._wheel()))
+        self.assertEqual(seen, [])
+
+
+class TestToastPruneRace(unittest.TestCase):
+    """Regression: prune vs add from a producer thread must not lose toasts."""
+
+    def test_concurrent_add_and_prune(self):
+        import threading
+        from tui.app import App
+        app = App()
+        stop = []
+
+        def pruner():
+            while not stop:
+                with app.lock:            # the run-loop's locked pattern
+                    app.toasts.prune()
+
+        t = threading.Thread(target=pruner)
+        t.start()
+        try:
+            for i in range(2000):
+                app.toast(f"t{i}", "info", ttl=60.0)
+        finally:
+            stop.append(1)
+            t.join()
+        alive = list(app.toasts)
+        # bounded by the limit and nothing silently lost below it
+        self.assertLessEqual(len(alive), app.toasts.limit)
+        self.assertEqual(len(alive), min(2000, app.toasts.limit))

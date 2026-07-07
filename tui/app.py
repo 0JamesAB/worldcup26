@@ -245,8 +245,11 @@ class App:
         or, absent that, is synthesized into Key.DOWN/Key.UP through
         dispatch_key. A left press looks up app.hits: a callable action
         is invoked; anything else is ignored (compatibility for raw
-        HitMap users). While a capture is active, presses are dropped.
+        HitMap users). While a capture is active, ALL mouse input is
+        dropped — the modal owns the interaction.
         """
+        if self.capture is not None:
+            return False
         if ev.kind == "wheel":
             delta = 1 if ev.button == "wheel_down" else -1
             view = self.views.get(self.view)
@@ -255,8 +258,6 @@ class App:
                 return True
             return self.dispatch_key(Key.DOWN if delta > 0 else Key.UP)
         if ev.kind != "press" or ev.button != "left":
-            return False
-        if self.capture is not None:
             return False
         action = self.hits.lookup(ev.row, ev.col)
         if callable(action):
@@ -301,7 +302,9 @@ class App:
                         self.dirty = True
                     if tw.mouse != self.mouse_enabled:
                         tw.set_mouse(self.mouse_enabled)
-                    if self.toasts.prune():
+                    with self.lock:   # add() from producer threads locks too
+                        pruned = self.toasts.prune()
+                    if pruned:
                         self.dirty = True
                     now = time.time()
                     if now - last_tick >= self.tick:

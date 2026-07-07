@@ -134,12 +134,9 @@ def build_app(st, refresher):
         return {(Key.LEFT, "h"): lambda: fn(-1), (Key.RIGHT, "l"): lambda: fn(1)}
 
     def wheel(fn):
-        """Wheel = one vertical step; ignored while the palette is open
-        (the old loop dropped all mouse input in command mode)."""
-        def on_wheel(d):
-            if app.capture is None:
-                fn(d)
-        return on_wheel
+        """Wheel = one vertical step. (The kit drops all mouse input
+        while a capture is active, so no palette guard is needed here.)"""
+        return fn
 
     sched_keys = horiz_nav(shift_day)
     sched_keys[Key.ENTER] = open_from(st.sched_ls, lambda: st.schedule_matches)
