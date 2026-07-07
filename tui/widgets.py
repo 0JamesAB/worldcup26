@@ -143,6 +143,25 @@ def split_fracs(a, b):
     return fa / tot, fb / tot
 
 
+def col_layout(cols_spec, w):
+    """Column extents for a draw_table cols_spec over `w` total columns.
+
+    cols_spec: [(header, width, align)]; width=-1 marks the one flex
+    column absorbing whatever the fixed columns leave over (clamped to
+    zero). Returns [(x, width)] per column, x relative to the table's
+    left edge.
+    """
+    fixed = sum(cw for _, cw, _ in cols_spec if cw >= 0)
+    flexw = max(0, w - fixed)
+    extents = []
+    x = 0
+    for _, cw, _ in cols_spec:
+        cwidth = flexw if cw < 0 else cw
+        extents.append((x, cwidth))
+        x += cwidth
+    return extents
+
+
 def draw_table(cv, r, c, w, cols_spec, rows, title="", title_style="",
                rule_style="", header_style=""):
     """Compact table.
@@ -162,34 +181,28 @@ def draw_table(cv, r, c, w, cols_spec, rows, title="", title_style="",
         tw = term.display_width(title)
         cv.hline(rr, c + tw + 1, max(0, w - tw - 1), rule_style, "─")
         rr += 1
-    fixed = sum(cw for _, cw, _ in cols_spec if cw >= 0)
-    flexw = max(0, w - fixed)
-    xs = []
-    x = c
-    for _, cw, _ in cols_spec:
-        xs.append(x)
-        x += flexw if cw < 0 else cw
+    cols = col_layout(cols_spec, w)
 
-    def cell_text(text, cw, align):
+    def cell_text(text, cwidth, align):
         text = str(text)
-        width_here = flexw if cw < 0 else cw
-        if term.display_width(text) > width_here:
-            text = term.strip_ansi(term.truncate(text, width_here))
+        if term.display_width(text) > cwidth:
+            text = term.strip_ansi(term.truncate(text, cwidth))
         if align == "right":
-            text = term.pad(text, width_here, "right")
+            text = term.pad(text, cwidth, "right")
         return text
 
     if any(h for h, _, _ in cols_spec):
-        for (hdr, cw, align), cx in zip(cols_spec, xs):
+        for (hdr, _, align), (cx, cwidth) in zip(cols_spec, cols):
             if hdr:
-                cv.put(rr, cx, cell_text(hdr, cw, align), header_style)
+                cv.put(rr, c + cx, cell_text(hdr, cwidth, align),
+                       header_style)
         rr += 1
     for row in rows:
-        for (hdr, cw, align), cx, cell in zip(cols_spec, xs, row):
+        for (_, _, align), (cx, cwidth), cell in zip(cols_spec, cols, row):
             if cell is None:
                 continue
             text, style = cell
-            cv.put(rr, cx, cell_text(text, cw, align), style)
+            cv.put(rr, c + cx, cell_text(text, cwidth, align), style)
         rr += 1
     return rr - r
 
@@ -470,3 +483,86 @@ def draw_rule(cv, r, c, width, title="", style="", title_style=None, ch="─"):
             t = term.strip_ansi(term.truncate(t, width))
         tx = c + max(0, (width - term.display_width(t)) // 2)
         cv.put(r, tx, t, style if title_style is None else title_style)
+
+
+# ----------------------------------------------------------------------------
+# Text pane and meter rows
+# ----------------------------------------------------------------------------
+
+def draw_text_pane(cv, r, c, h, w, lines, scroll, wrap=True, style="",
+                   pct=False, pct_style=""):
+    """Scrolling text pane over rows [r, r+h) x cols [c, c+w).
+
+    `lines` entries are str or (text, style) pairs; a pair's style
+    replaces the default `style` for every row that entry produces.
+    When `wrap`, each entry word-wraps to `w` columns via term.wrap (an
+    entry may span several rows); otherwise entries render one per row,
+    truncated to `w`.
+
+    The total line count is fed into scroll.set_extent(total, h)
+    (scroll: interact.ScrollState) and the slice at scroll.offset is
+    drawn. When `pct` and the content overflows, the scroll position
+    ("NN%") is right-aligned on the top row in pct_style. Returns the
+    total (wrapped) line count.
+    """
+    flat = []
+    for entry in lines:
+        if isinstance(entry, tuple):
+            text, sty = entry
+        else:
+            text, sty = entry, style
+        if wrap:
+            for seg in term.wrap(str(text), w):
+                flat.append((seg, sty))
+        else:
+            flat.append((str(text), sty))
+    total = len(flat)
+    scroll.set_extent(total, h)
+    y = r
+    for text, sty in flat[scroll.offset:scroll.offset + max(0, h)]:
+        if term.display_width(text) > w:
+            text = term.strip_ansi(term.truncate(text, w))
+        cv.put(y, c, text, sty)
+        y += 1
+    if pct and total > h:
+        tag = str(scroll.pct) + "%"
+        cv.put(r, c + w - term.display_width(tag), tag, pct_style)
+    return total
+
+
+def draw_meter_rows(cv, r, c, w, items, label_w=None,
+                    thresholds=((0.6, None), (0.8, None)), styles=None,
+                    label_style="", track_style=None, show_pct=False,
+                    pct_style=""):
+    """Labelled meter rows: one draw_progress bar per (label, frac) item.
+
+    label_w defaults to the widest label + 1; wider labels truncate.
+    The fill style is picked per row by frac against `thresholds` --
+    ascending (cutoff, style) pairs where the first cutoff the frac is
+    below wins. A None pair style falls back to the matching entry of
+    `styles`, a (below, mid, high) triple (one more entry than
+    thresholds) whose last entry covers fracs at or above every cutoff;
+    styles=None means unstyled fills. track_style/show_pct/pct_style
+    pass through to draw_progress. Returns rows used.
+    """
+    if styles is None:
+        styles = ("",) * (len(thresholds) + 1)
+    if label_w is None:
+        label_w = max([term.display_width(str(lb)) for lb, _ in items],
+                      default=0) + 1
+    rr = r
+    for label, frac in items:
+        fill_style = styles[len(thresholds)]
+        for i, (cut, sty) in enumerate(thresholds):
+            if frac < cut:
+                fill_style = styles[i] if sty is None else sty
+                break
+        label = str(label)
+        if term.display_width(label) > label_w:
+            label = term.strip_ansi(term.truncate(label, label_w))
+        cv.put(rr, c, label, label_style)
+        draw_progress(cv, rr, c + label_w, max(0, w - label_w), frac,
+                      fill_style, track_style, show_pct=show_pct,
+                      pct_style=pct_style)
+        rr += 1
+    return rr - r

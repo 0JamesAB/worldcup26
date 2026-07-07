@@ -4,6 +4,7 @@ import unittest
 
 from tui import term
 from tui.canvas import Canvas
+from tui.interact import ScrollState
 from tui import widgets
 
 
@@ -406,6 +407,152 @@ class TestDrawRule(unittest.TestCase):
         widgets.draw_rule(cv, 0, 2, 0, title="hi")
         widgets.draw_rule(cv, 0, 2, -3, title="hi")
         self.assertEqual(row_text(cv, 0), " " * 8)
+
+
+class TestColLayout(unittest.TestCase):
+    SPEC = [("#", 2, "left"), ("Name", -1, "left"), ("Pts", 4, "right")]
+
+    def test_flex_absorbs_leftover(self):
+        self.assertEqual(widgets.col_layout(self.SPEC, 20),
+                         [(0, 2), (2, 14), (16, 4)])
+
+    def test_all_fixed(self):
+        spec = [("a", 3, "left"), ("b", 5, "left")]
+        self.assertEqual(widgets.col_layout(spec, 20), [(0, 3), (3, 5)])
+
+    def test_flex_clamped_to_zero(self):
+        # fixed columns already exceed w: the flex column gets width 0
+        self.assertEqual(widgets.col_layout(self.SPEC, 5),
+                         [(0, 2), (2, 0), (2, 4)])
+
+    def test_matches_draw_table_placement(self):
+        # the extents are exactly where draw_table renders each column
+        cv = Canvas(26, 3)
+        c = 3
+        rows = [[("1", ""), ("Alpha", ""), ("10", "")]]
+        widgets.draw_table(cv, 0, c, 20, self.SPEC, rows)
+        cols = widgets.col_layout(self.SPEC, 20)
+        hdr_row = row_text(cv, 0)
+        for (hdr, _, align), (x, cw) in zip(self.SPEC, cols):
+            if align == "left":
+                self.assertEqual(hdr_row[c + x:c + x + len(hdr)], hdr)
+            else:
+                self.assertEqual(
+                    hdr_row[c + x + cw - len(hdr):c + x + cw], hdr)
+        body = row_text(cv, 1)
+        self.assertEqual(body[c + cols[0][0]], "1")
+        self.assertEqual(body[c + cols[1][0]:c + cols[1][0] + 5], "Alpha")
+        x, cw = cols[2]
+        self.assertEqual(body[c + x:c + x + cw], "  10")
+
+
+class TestDrawTextPane(unittest.TestCase):
+    LINES = ["aaa bbb ccc", "dd"]  # wraps at w=7 to: aaa bbb / ccc / dd
+
+    def test_wrap_total_and_extent(self):
+        cv = Canvas(10, 4)
+        sc = ScrollState()
+        total = widgets.draw_text_pane(cv, 0, 0, 4, 7, self.LINES, sc)
+        self.assertEqual(total, 3)
+        self.assertEqual((sc.content, sc.viewport), (3, 4))
+        self.assertEqual(row_text(cv, 0).rstrip(), "aaa bbb")
+        self.assertEqual(row_text(cv, 1).rstrip(), "ccc")
+        self.assertEqual(row_text(cv, 2).rstrip(), "dd")
+        self.assertEqual(row_text(cv, 3).strip(), "")
+
+    def test_scroll_offset_windows_content(self):
+        cv = Canvas(10, 2)
+        sc = ScrollState(content=3, viewport=2, offset=1)
+        widgets.draw_text_pane(cv, 0, 0, 2, 7, self.LINES, sc)
+        self.assertEqual(row_text(cv, 0).rstrip(), "ccc")
+        self.assertEqual(row_text(cv, 1).rstrip(), "dd")
+
+    def test_stale_offset_reclamped(self):
+        cv = Canvas(10, 2)
+        sc = ScrollState(content=99, viewport=2, offset=50)
+        widgets.draw_text_pane(cv, 0, 0, 2, 7, self.LINES, sc)
+        self.assertEqual(sc.offset, 1)  # max_offset for 3 lines in 2 rows
+        self.assertEqual(row_text(cv, 0).rstrip(), "ccc")
+
+    def test_entry_style_overrides_default(self):
+        cv = Canvas(10, 2)
+        sc = ScrollState()
+        widgets.draw_text_pane(cv, 0, 0, 2, 8, ["plain", ("hot", "H")],
+                               sc, style="D")
+        self.assertEqual(cv.grid[0][0].style, "D")
+        self.assertEqual(cv.grid[1][0].style, "H")
+
+    def test_pct_right_aligned_on_overflow(self):
+        cv = Canvas(12, 2)
+        sc = ScrollState(content=3, viewport=2, offset=1)
+        widgets.draw_text_pane(cv, 0, 2, 2, 10, self.LINES, sc,
+                               pct=True, pct_style="P")
+        row = row_text(cv, 0)
+        self.assertEqual(row[8:12], "100%")  # right edge is c + w = 12
+        self.assertEqual(cv.grid[0][8].style, "P")
+
+    def test_pct_omitted_when_content_fits(self):
+        cv = Canvas(12, 4)
+        sc = ScrollState()
+        widgets.draw_text_pane(cv, 0, 0, 4, 10, ["one", "two"], sc,
+                               pct=True, pct_style="P")
+        self.assertNotIn("%", row_text(cv, 0))
+
+    def test_nowrap_truncates_long_lines(self):
+        cv = Canvas(12, 2)
+        sc = ScrollState()
+        total = widgets.draw_text_pane(cv, 0, 0, 2, 6,
+                                       ["a-very-long-line"], sc, wrap=False)
+        self.assertEqual(total, 1)
+        row = row_text(cv, 0)
+        self.assertIn("…", row[:6])
+        self.assertEqual(row[6:], " " * 6)  # nothing past c + w
+
+
+class TestDrawMeterRows(unittest.TestCase):
+    ITEMS = [("cpu", 0.30), ("mem", 0.70), ("disk", 0.95)]
+    STYLES = ("L", "M", "H")
+
+    def test_threshold_style_selection(self):
+        cv = Canvas(20, 3)
+        used = widgets.draw_meter_rows(cv, 0, 0, 20, self.ITEMS,
+                                       styles=self.STYLES)
+        self.assertEqual(used, 3)
+        # label_w defaults to the widest label ("disk") + 1 = 5
+        for i, sty in enumerate(self.STYLES):
+            self.assertEqual(cv.grid[i][5].ch, "█")
+            self.assertEqual(cv.grid[i][5].style, sty)
+
+    def test_threshold_boundaries_are_exclusive_below(self):
+        cv = Canvas(20, 2)
+        widgets.draw_meter_rows(cv, 0, 0, 20, [("a", 0.6), ("b", 0.8)],
+                                styles=self.STYLES)
+        self.assertEqual(cv.grid[0][2].style, "M")  # 0.6 is not below 0.6
+        self.assertEqual(cv.grid[1][2].style, "H")
+
+    def test_threshold_pair_style_override(self):
+        cv = Canvas(20, 1)
+        widgets.draw_meter_rows(cv, 0, 0, 20, [("a", 0.1)],
+                                thresholds=((0.6, "X"), (0.8, None)),
+                                styles=self.STYLES)
+        self.assertEqual(cv.grid[0][2].style, "X")
+
+    def test_labels_and_explicit_label_w(self):
+        cv = Canvas(20, 1)
+        widgets.draw_meter_rows(cv, 0, 0, 20, [("longlabel", 1.0)],
+                                label_w=5, styles=self.STYLES,
+                                label_style="LS")
+        row = row_text(cv, 0)
+        self.assertIn("…", row[:5])       # label truncated to label_w
+        self.assertEqual(cv.grid[0][0].style, "LS")
+        self.assertEqual(row[5:20], "█" * 15)  # bar starts at label_w
+
+    def test_default_styles_are_plain(self):
+        cv = Canvas(12, 1)
+        used = widgets.draw_meter_rows(cv, 0, 0, 12, [("a", 0.5)])
+        self.assertEqual(used, 1)
+        self.assertEqual(cv.grid[0][2].ch, "█")
+        self.assertEqual(cv.grid[0][2].style, "")
 
 
 if __name__ == "__main__":

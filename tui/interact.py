@@ -137,3 +137,52 @@ class HitMap:
 
     def __len__(self):
         return len(self._regions)
+
+
+class LineEdit:
+    """Single-line text editor state. Pure state: no drawing here.
+
+    Feed keys from `term.read_key` into handle_key(); printable
+    characters insert at the cursor, and BACKSPACE/DELETE/LEFT/RIGHT/
+    HOME/END edit or move (the Key.* constants are plain strings, so
+    this module stays term-free). handle_key returns True when it
+    consumed the key and False otherwise, so callers can layer their
+    own bindings on top (ENTER, ESC, TAB, mouse events fall through).
+    """
+
+    def __init__(self, text=""):
+        self.buf = text
+        self.cursor = len(text)
+
+    @property
+    def text(self):
+        return self.buf
+
+    def clear(self):
+        self.buf = ""
+        self.cursor = 0
+
+    def handle_key(self, key):
+        """Apply `key`; True if consumed, False for the caller."""
+        if not isinstance(key, str):
+            return False
+        if key == "LEFT":
+            self.cursor = max(0, self.cursor - 1)
+        elif key == "RIGHT":
+            self.cursor = min(len(self.buf), self.cursor + 1)
+        elif key == "HOME":
+            self.cursor = 0
+        elif key == "END":
+            self.cursor = len(self.buf)
+        elif key == "BACKSPACE":
+            if self.cursor > 0:
+                self.buf = self.buf[:self.cursor - 1] + self.buf[self.cursor:]
+                self.cursor -= 1
+        elif key == "DELETE":
+            self.buf = self.buf[:self.cursor] + self.buf[self.cursor + 1:]
+        elif len(key) == 1 and key.isprintable():
+            self.buf = self.buf[:self.cursor] + key + self.buf[self.cursor:]
+            self.cursor += 1
+        else:
+            return False
+        return True

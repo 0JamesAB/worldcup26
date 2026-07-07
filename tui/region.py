@@ -6,8 +6,9 @@ Region). It speaks the Canvas protocol in local coordinates -- (0, 0) is
 the region's own top-left -- so the free widgets in widgets.py draw
 through it unchanged, and it adds the ergonomics the app layer keeps
 re-deriving by hand: alignment verbs, a flowing cursor, slicing and
-splitting geometry, HitMap registration, a windowed blit, and widget
-sugar.
+splitting geometry, HitMap registration, a windowed blit, widget sugar,
+and the interaction-integrated widgets (select_list, popup/modal,
+input) that need clip, hits and state together.
 
 The clip rectangle (own absolute rect ∩ parent clip ∩ canvas) is
 precomputed at construction and threaded into every Canvas primitive:
@@ -343,3 +344,138 @@ class Region:
     def gradient(self, text, c0, c1, r=0, c=0, extra=""):
         """gradient_put at local (r, c). Returns the local end col."""
         return widgets.gradient_put(self, r, c, text, c0, c1, _sty(extra))
+
+    def text_pane(self, lines, scroll, r=0, c=0, h=None, w=None, **kw):
+        """draw_text_pane over the local rect. Returns the total
+        (wrapped) line count."""
+        if h is None:
+            h = self.h - r
+        if w is None:
+            w = self.w - c
+        return widgets.draw_text_pane(self, r, c, h, w, lines, scroll,
+                                      **_sty_kwargs(kw))
+
+    def meter_rows(self, items, r=0, c=0, w=None, **kw):
+        """draw_meter_rows over the local width. Returns rows used."""
+        if w is None:
+            w = self.w - c
+        return widgets.draw_meter_rows(self, r, c, w, items,
+                                       **_sty_kwargs(kw))
+
+    # -- interaction-integrated widgets (clip + hits + state together) ----------
+
+    def select_list(self, items, state, draw_item, item_h=1, on_open=None,
+                    counter=None):
+        """Windowed selectable list with integrated click handling.
+
+        `state` is an interact.ListState; its count is synced to
+        len(items) first. Each visible item is painted by
+        draw_item(item_region, item, i, selected) into its own
+        full-width Region of item_h rows; item_h may be a callable
+        (item) -> rows for variable-height items. Windowing is the
+        run-fit algorithm: advance the window start until the run
+        start..sel fits the region height, always draw the first
+        windowed item (clipped when oversized), and drop rather than
+        clip later items. For uniform item_h this degrades to the
+        simple bottom-anchored window. Every visible item registers a
+        click hit: clicking selects it, and clicking the already
+        selected item calls on_open(item, i) when given. When items
+        overflow, counter(start, stop, count) is called so the caller
+        can draw its own indicator. Returns the visible (start, stop)
+        slice.
+        """
+        count = len(items)
+        state.set_count(count)
+        if count == 0 or self.h <= 0:
+            return (0, 0)
+        if callable(item_h):
+            heights = [item_h(it) for it in items]
+        else:
+            heights = [item_h] * count
+        sel = state.sel
+        start = 0
+        # advance `start` until the run start..sel fits; running sum O(n)
+        used = sum(heights[:sel + 1])
+        while start < sel and used > self.h:
+            used -= heights[start]
+            start += 1
+        r = 0
+        stop = start
+        for i in range(start, count):
+            rows_i = heights[i]
+            # keep whole items (but always draw the first)
+            if i > start and r + rows_i > self.h:
+                break
+            item_rg = self.sub(r, 0, rows_i, self.w)
+            draw_item(item_rg, items[i], i, i == sel)
+
+            def click(i=i, item=items[i]):
+                if i == state.sel and on_open is not None:
+                    on_open(item, i)
+                state.sel = i
+
+            item_rg.hit(click)
+            r += rows_i
+            stop = i + 1
+        if counter is not None and stop - start < count:
+            counter(start, stop, count)
+        return (start, stop)
+
+    def popup(self, r, c, h, w, title="", style="", fill_style=None,
+              chars=None):
+        """Overlay box at local (r, c): border, opaque fill, and a
+        click-swallowing hit over the whole rect so hits drawn under
+        the overlay are dead. fill_style defaults to region.style,
+        chars to LIGHT. Content hits registered afterwards (inside the
+        returned inner Region) win the overlap. Returns the inner
+        content Region."""
+        inner = self.box(r, c, h, w, style=style,
+                         chars=LIGHT if chars is None else chars, title=title,
+                         fill_style=(self.style if fill_style is None
+                                     else _sty(fill_style)))
+        if self.hits is not None:
+            self.hit(lambda: None, r, c, h, w)
+        return inner
+
+    def modal(self, h, w, **kw):
+        """An h x w popup centered in the region. Returns the inner
+        content Region."""
+        return self.popup(max(0, (self.h - h) // 2),
+                          max(0, (self.w - w) // 2), h, w, **kw)
+
+    def input(self, edit, prompt="", style="", cursor_style=None, ghost="",
+              r=0):
+        """A one-line text input on row `r`: prompt, the edit buffer
+        with a block cursor at edit.cursor, and an optional dim `ghost`
+        completion after the text. `edit` is anything with .text and
+        .cursor (interact.LineEdit); key handling stays on it -- this
+        only draws. The buffer scrolls horizontally to keep the cursor
+        visible; column math assumes single-width characters.
+        cursor_style defaults to `style` + REVERSE. Returns the
+        cursor's local column."""
+        style = _sty(style)
+        if cursor_style is None:
+            cursor_style = style + term.REVERSE
+        else:
+            cursor_style = _sty(cursor_style)
+        c = self.put(r, 0, prompt, style) if prompt else 0
+        avail = self.w - c
+        if avail <= 0:
+            return c
+        text = edit.text
+        cur = max(0, min(edit.cursor, len(text)))
+        off = cur - avail + 1 if cur >= avail else 0
+        vis = text[off:off + avail]
+        self.put(r, c, vis, style)
+        tail = c + len(vis)
+        if ghost and off + len(vis) == len(text) and tail < self.w:
+            self.put(r, tail, ghost, style + term.DIM, max_w=self.w - tail)
+        cx = c + cur - off
+        if cur < len(text):
+            ch = text[cur]
+        elif ghost:
+            ch = ghost[0]
+        else:
+            ch = " "
+        self.put(r, cx, ch, cursor_style)
+        return cx

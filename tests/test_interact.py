@@ -254,3 +254,166 @@ class TestHitMap(unittest.TestCase):
         self.hm.clear()
         self.assertIsNone(self.hm.lookup(0, 0))
         self.assertEqual(len(self.hm), 0)
+
+
+class _FakeMouseEvent:
+    """MouseEvent-shaped object; LineEdit must pass it through."""
+
+    def __init__(self):
+        self.row, self.col, self.button, self.kind = 0, 0, "left", "press"
+
+
+class TestLineEditTyping(unittest.TestCase):
+    def setUp(self):
+        from tui.interact import LineEdit
+        self.ed = LineEdit()
+
+    def type_all(self, s):
+        for ch in s:
+            self.assertTrue(self.ed.handle_key(ch))
+
+    def test_empty(self):
+        self.assertEqual(self.ed.text, "")
+        self.assertEqual(self.ed.cursor, 0)
+
+    def test_init_text_puts_cursor_at_end(self):
+        from tui.interact import LineEdit
+        ed = LineEdit("abc")
+        self.assertEqual(ed.text, "abc")
+        self.assertEqual(ed.cursor, 3)
+
+    def test_typing_appends_and_advances(self):
+        self.type_all("hi there")
+        self.assertEqual(self.ed.text, "hi there")
+        self.assertEqual(self.ed.cursor, 8)
+
+    def test_insert_mid_buffer(self):
+        self.type_all("ac")
+        self.ed.handle_key("LEFT")
+        self.assertTrue(self.ed.handle_key("b"))
+        self.assertEqual(self.ed.text, "abc")
+        self.assertEqual(self.ed.cursor, 2)
+
+    def test_insert_at_start(self):
+        self.type_all("bc")
+        self.ed.handle_key("HOME")
+        self.ed.handle_key("a")
+        self.assertEqual(self.ed.text, "abc")
+        self.assertEqual(self.ed.cursor, 1)
+
+    def test_unicode_chars_are_just_chars(self):
+        # Wide/emoji chars count as one char here; width is the
+        # widget's problem, not the editor state's.
+        for ch in ("日", "本", "🎉"):
+            self.assertTrue(self.ed.handle_key(ch))
+        self.assertEqual(self.ed.text, "日本🎉")
+        self.assertEqual(self.ed.cursor, 3)
+        self.ed.handle_key("LEFT")
+        self.ed.handle_key("BACKSPACE")
+        self.assertEqual(self.ed.text, "日🎉")
+        self.assertEqual(self.ed.cursor, 1)
+
+    def test_clear(self):
+        self.type_all("abc")
+        self.ed.clear()
+        self.assertEqual(self.ed.text, "")
+        self.assertEqual(self.ed.cursor, 0)
+
+
+class TestLineEditEditingKeys(unittest.TestCase):
+    def setUp(self):
+        from tui.interact import LineEdit
+        self.ed = LineEdit("abcd")
+
+    def test_backspace_at_end(self):
+        self.assertTrue(self.ed.handle_key("BACKSPACE"))
+        self.assertEqual(self.ed.text, "abc")
+        self.assertEqual(self.ed.cursor, 3)
+
+    def test_backspace_mid_buffer(self):
+        self.ed.cursor = 2
+        self.ed.handle_key("BACKSPACE")
+        self.assertEqual(self.ed.text, "acd")
+        self.assertEqual(self.ed.cursor, 1)
+
+    def test_backspace_at_start_consumed_noop(self):
+        self.ed.cursor = 0
+        self.assertTrue(self.ed.handle_key("BACKSPACE"))
+        self.assertEqual(self.ed.text, "abcd")
+        self.assertEqual(self.ed.cursor, 0)
+
+    def test_delete_mid_buffer(self):
+        self.ed.cursor = 1
+        self.assertTrue(self.ed.handle_key("DELETE"))
+        self.assertEqual(self.ed.text, "acd")
+        self.assertEqual(self.ed.cursor, 1)
+
+    def test_delete_at_end_consumed_noop(self):
+        self.assertTrue(self.ed.handle_key("DELETE"))
+        self.assertEqual(self.ed.text, "abcd")
+        self.assertEqual(self.ed.cursor, 4)
+
+    def test_delete_everything_forward(self):
+        self.ed.handle_key("HOME")
+        for _ in range(6):  # two extra past empty
+            self.ed.handle_key("DELETE")
+        self.assertEqual(self.ed.text, "")
+        self.assertEqual(self.ed.cursor, 0)
+
+    def test_left_right_clamped(self):
+        for _ in range(10):
+            self.assertTrue(self.ed.handle_key("LEFT"))
+        self.assertEqual(self.ed.cursor, 0)
+        for _ in range(10):
+            self.assertTrue(self.ed.handle_key("RIGHT"))
+        self.assertEqual(self.ed.cursor, 4)
+
+    def test_home_end(self):
+        self.assertTrue(self.ed.handle_key("HOME"))
+        self.assertEqual(self.ed.cursor, 0)
+        self.assertTrue(self.ed.handle_key("END"))
+        self.assertEqual(self.ed.cursor, 4)
+
+    def test_key_constants_match_term(self):
+        # LineEdit matches literal strings so interact stays term-free;
+        # this pins them to the real Key constants.
+        from tui.term import Key
+        for k in (Key.LEFT, Key.RIGHT, Key.HOME, Key.END,
+                  Key.BACKSPACE, Key.DELETE):
+            self.assertTrue(self.ed.handle_key(k))
+
+
+class TestLineEditPassthrough(unittest.TestCase):
+    def setUp(self):
+        from tui.interact import LineEdit
+        self.ed = LineEdit("abc")
+        self.ed.cursor = 1
+
+    def assert_unconsumed(self, key):
+        self.assertFalse(self.ed.handle_key(key))
+        self.assertEqual(self.ed.text, "abc")
+        self.assertEqual(self.ed.cursor, 1)
+
+    def test_non_str_keys_fall_through(self):
+        self.assert_unconsumed(_FakeMouseEvent())
+        self.assert_unconsumed(None)
+        self.assert_unconsumed(7)
+
+    def test_named_keys_fall_through(self):
+        for key in ("ENTER", "ESC", "TAB", "SHIFT_TAB", "UP", "DOWN",
+                    "PGUP", "PGDN", "CTRL_R"):
+            self.assert_unconsumed(key)
+
+    def test_control_chars_fall_through(self):
+        self.assert_unconsumed("\x1b")
+        self.assert_unconsumed("\n")
+        self.assert_unconsumed("\t")
+
+    def test_multichar_strings_fall_through(self):
+        self.assert_unconsumed("ab")
+        self.assert_unconsumed("")
+
+    def test_space_is_printable(self):
+        self.assertTrue(self.ed.handle_key(" "))
+        self.assertEqual(self.ed.text, "a bc")
+        self.assertEqual(self.ed.cursor, 2)

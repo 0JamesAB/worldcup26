@@ -3,8 +3,8 @@
 import unittest
 
 from tui import term, widgets
-from tui.canvas import Canvas, LIGHT
-from tui.interact import HitMap
+from tui.canvas import Canvas, HEAVY, LIGHT
+from tui.interact import HitMap, ListState, ScrollState
 from tui.layout import Flex, Rect, hsplit, vsplit
 from tui.region import Region
 from tui.styles import Style
@@ -725,6 +725,40 @@ class TestWidgetSugar(unittest.TestCase):
         self.assertEqual(a.to_lines(), b.to_lines())
         self.assertEqual(ea - 3, eb)
 
+    def test_text_pane_matches_free_function(self):
+        lines = ["alpha beta gamma delta", ("hot", "H")]
+        a = Canvas(20, 6)
+        na = widgets.draw_text_pane(a, 1, 2, 3, 10, lines, ScrollState(),
+                                    style="S", pct=True, pct_style="P")
+        b = Canvas(20, 6)
+        nb = b.region(1, 2, 3, 10).text_pane(lines, ScrollState(), style="S",
+                                             pct=True, pct_style="P")
+        self.assertEqual(a.to_lines(), b.to_lines())
+        self.assertEqual(na, nb)
+
+    def test_text_pane_defaults_cover_region(self):
+        a = Canvas(16, 5)
+        widgets.draw_text_pane(a, 1, 2, 4, 14, ["one two"], ScrollState(),
+                               wrap=False)
+        b = Canvas(16, 5)
+        b.region(1, 2).text_pane(["one two"], ScrollState(), wrap=False)
+        self.assertEqual(a.to_lines(), b.to_lines())
+
+    def test_meter_rows_matches_free_function(self):
+        items = [("cpu", 0.42), ("memory", 0.93)]
+        a = Canvas(24, 4)
+        na = widgets.draw_meter_rows(a, 1, 1, 20, items,
+                                     styles=("L", "M", "H"), label_style="B",
+                                     track_style="T", show_pct=True,
+                                     pct_style="P")
+        b = Canvas(24, 4)
+        nb = b.region(1, 1, 3, 20).meter_rows(items, styles=("L", "M", "H"),
+                                              label_style="B",
+                                              track_style="T", show_pct=True,
+                                              pct_style="P")
+        self.assertEqual(a.to_lines(), b.to_lines())
+        self.assertEqual(na, nb)
+
     def test_sugar_clipped_by_region(self):
         cv = Canvas(10, 4)
         rg = cv.region(1, 1, 2, 4)
@@ -751,6 +785,385 @@ class TestNoEscapes(unittest.TestCase):
         rg = Canvas(4, 2).region()
         self.assertFalse(hasattr(rg, "grid"))
         self.assertFalse(hasattr(rg, "to_lines"))
+
+
+def _noop_item(rg, item, i, selected):
+    pass
+
+
+class TestSelectList(unittest.TestCase):
+    def _list(self, n_or_heights, sel, h, w=12, hits=None, on_open=None,
+              counter=None, draw=None):
+        """select_list over n 1-row items (int) or explicit heights (list);
+        returns ((start, stop), state, canvas)."""
+        if isinstance(n_or_heights, int):
+            items = ["item%d" % i for i in range(n_or_heights)]
+            item_h = 1
+        else:
+            items = list(range(len(n_or_heights)))
+            item_h = lambda it: n_or_heights[it]
+        cv = Canvas(w, h)
+        st = ListState(len(items), sel)
+        out = cv.region(hits=hits).select_list(
+            items, st, draw or _noop_item, item_h=item_h, on_open=on_open,
+            counter=counter)
+        return out, st, cv
+
+    def test_uniform_degrades_to_bottom_anchored_window(self):
+        for sel in range(10):
+            out, _, _ = self._list(10, sel, h=4)
+            start = max(0, sel - 3)
+            self.assertEqual(out, (start, start + 4), sel)
+
+    def test_uniform_all_fit(self):
+        out, _, _ = self._list(3, 1, h=6)
+        self.assertEqual(out, (0, 3))
+
+    def test_uniform_item_h_int(self):
+        # 5 items of 2 rows in 6 rows: three fit; sel at the end anchors
+        cv = Canvas(10, 6)
+        st = ListState(5, 4)
+        out = cv.region().select_list(list("abcde"), st, _noop_item, item_h=2)
+        self.assertEqual(out, (2, 5))
+
+    def test_variable_heights_hand_computed(self):
+        # the live-card shape: heights 5,5,8,5,5 in a 19-row region
+        cases = {0: (0, 3), 1: (0, 3), 2: (0, 3), 3: (1, 4), 4: (2, 5)}
+        for sel, want in cases.items():
+            out, _, _ = self._list([5, 5, 8, 5, 5], sel, h=19)
+            self.assertEqual(out, want, sel)
+
+    def test_whole_items_only_after_the_first(self):
+        # heights 3,3: the second is dropped, not clipped, in 5 rows
+        out, _, _ = self._list([3, 3], 0, h=5)
+        self.assertEqual(out, (0, 1))
+
+    def test_first_windowed_item_always_drawn(self):
+        # sel's own item taller than the region still draws (clipped)
+        calls = []
+
+        def draw(rg, item, i, selected):
+            calls.append((i, selected, rg.h))
+
+        out, _, _ = self._list([3, 10], 1, h=5, draw=draw)
+        self.assertEqual(out, (1, 2))
+        self.assertEqual(calls, [(1, True, 10)])
+
+    def test_draw_item_regions_and_selection_flag(self):
+        rects = []
+
+        def draw(rg, item, i, selected):
+            rects.append((i, rg.rect, selected))
+            rg.put(0, 0, item)
+
+        cv = Canvas(8, 6)
+        st = ListState(3, 1)
+        out = cv.region(1, 1, 4, 6).select_list(["aa", "bb", "cc"], st, draw,
+                                                item_h=2)
+        self.assertEqual(out, (0, 2))
+        self.assertEqual(rects, [(0, Rect(1, 1, 2, 6), False),
+                                 (1, Rect(3, 1, 2, 6), True)])
+        self.assertEqual(row_text(cv, 1)[1:3], "aa")
+        self.assertEqual(row_text(cv, 3)[1:3], "bb")
+
+    def test_set_count_syncs_and_clamps_stale_state(self):
+        st = ListState(99, 50)
+        cv = Canvas(10, 8)
+        out = cv.region().select_list(list("abc"), st, _noop_item)
+        self.assertEqual((st.count, st.sel), (3, 2))
+        self.assertEqual(out, (0, 3))
+
+    def test_empty_items(self):
+        called = []
+        hits = HitMap()
+        out, _, _ = self._list(0, 0, h=4, hits=hits,
+                               counter=lambda *a: called.append(a))
+        self.assertEqual(out, (0, 0))
+        self.assertEqual(called, [])
+        self.assertEqual(len(hits), 0)
+
+    def test_click_selects(self):
+        hits = HitMap()
+        out, st, _ = self._list(6, 1, h=4, hits=hits)
+        self.assertEqual(out, (0, 4))
+        act = hits.lookup(2, 0)      # row of item 2
+        self.assertTrue(callable(act))
+        act()
+        self.assertEqual(st.sel, 2)
+
+    def test_click_hits_cover_item_rects(self):
+        hits = HitMap()
+        # heights 2,3 laid out at rows 0..1 and 2..4
+        _, st, _ = self._list([2, 3], 1, h=6, hits=hits)
+        hits.lookup(1, 11)()          # bottom-right cell of item 0
+        self.assertEqual(st.sel, 0)
+        hits.lookup(4, 0)()
+        self.assertEqual(st.sel, 1)
+        self.assertIsNone(hits.lookup(5, 0))   # below the last item
+
+    def test_click_selected_opens(self):
+        hits = HitMap()
+        opened = []
+        _, st, _ = self._list(5, 1, h=5, hits=hits,
+                              on_open=lambda item, i: opened.append((item, i)))
+        hits.lookup(3, 0)()           # first click: select only
+        self.assertEqual(st.sel, 3)
+        self.assertEqual(opened, [])
+        hits.lookup(3, 0)()           # click the selected item: open
+        self.assertEqual(opened, [("item3", 3)])
+        self.assertEqual(st.sel, 3)
+
+    def test_click_selected_without_on_open_is_noop(self):
+        hits = HitMap()
+        _, st, _ = self._list(3, 2, h=4, hits=hits)
+        hits.lookup(2, 0)()           # already selected, no on_open
+        self.assertEqual(st.sel, 2)
+
+    def test_counter_only_on_overflow(self):
+        calls = []
+        counter = lambda *a: calls.append(a)
+        self._list(4, 0, h=6, counter=counter)     # all fit: not called
+        self.assertEqual(calls, [])
+        self._list(9, 4, h=3, counter=counter)     # overflow
+        self.assertEqual(calls, [(2, 5, 9)])
+
+    def test_no_hitmap_is_fine(self):
+        out, _, cv = self._list(4, 0, h=4)         # hits=None: draw only
+        self.assertEqual(out, (0, 4))
+
+
+class TestSelectListMatchesViewLive(unittest.TestCase):
+    """A/B oracle: select_list's run-fit windowing reproduces view_live's
+    on the live fixture -- same visible cards, same top rows."""
+
+    def test_windowing_matches_view_live(self):
+        import os
+        import sys
+        import time
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from tui import theme as tui_theme
+        saved = (term.get_color_depth(), tui_theme.get_theme(),
+                 os.environ.get("TZ"), os.environ.get("WCUP_ODDS_FORMAT"))
+        try:
+            import fixtures_views as F
+            import views
+            order = {"in": 0, "pre": 1, "post": 2}
+            # hand-computed: sorted card heights are 5,5,8,5,5; the card
+            # body is rows-5 tall (19 at 80x24, 35 at 120x40: all fit)
+            hand = {(80, 24): {0: (0, 3), 1: (0, 3), 2: (0, 3),
+                               3: (1, 4), 4: (2, 5)},
+                    (120, 40): {s: (0, 5) for s in range(5)}}
+            for cols, rows in ((80, 24), (120, 40)):
+                for sel in range(5):
+                    key = (cols, rows, sel)
+                    st = F.state_live()
+                    st.live_sel = sel
+                    cv = Canvas(cols, rows)
+                    # exactly render()'s view_live rect: rows [2, rows-2)
+                    views.view_live(cv.region(hits=st.hits).rows(2, -2),
+                                    st, F.FRAME + 1)
+                    # visible card index -> absolute top row, via its hit
+                    seen = {}
+                    for y in range(rows):
+                        for x in range(cols):
+                            a = st.hits.lookup(y, x)
+                            if a is not None:
+                                seen[a[2]] = min(seen.get(a[2], y), y)
+                    matches = sorted(
+                        st.matches_today,
+                        key=lambda m: (order.get(m.state, 3), m.date))
+                    tops = {}
+
+                    def draw(rg, m, i, s, tops=tops):
+                        tops[i] = rg.rect.r
+
+                    body = Canvas(cols, rows).region().rows(3, -2)
+                    ls = ListState(len(matches), sel)
+                    start, stop = body.select_list(matches, ls, draw,
+                                                   item_h=views.card_rows)
+                    self.assertEqual((start, stop), hand[(cols, rows)][sel],
+                                     key)
+                    self.assertEqual(sorted(seen), list(range(start, stop)),
+                                     key)
+                    for i in range(start, stop):
+                        self.assertEqual(tops[i], seen[i], key)
+        finally:
+            term.set_color_depth(saved[0])
+            tui_theme.set_theme(saved[1])
+            if saved[2] is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = saved[2]
+            time.tzset()
+            if saved[3] is None:
+                os.environ.pop("WCUP_ODDS_FORMAT", None)
+            else:
+                os.environ["WCUP_ODDS_FORMAT"] = saved[3]
+
+
+class TestPopup(unittest.TestCase):
+    def test_box_fill_and_inner_region(self):
+        cv = Canvas(14, 8)
+        rg = cv.region(1, 1, 6, 12, style="BG")
+        inner = rg.popup(1, 2, 4, 8, title="T", style="S")
+        self.assertEqual(inner.rect, Rect(3, 4, 2, 6))
+        self.assertEqual(cv.grid[2][3].ch, LIGHT["tl"])
+        self.assertEqual(cv.grid[5][10].ch, LIGHT["br"])
+        self.assertEqual(cv.grid[2][3].style, "S")
+        # interior fill defaults to region.style
+        self.assertEqual(cv.grid[3][4].style, "BG")
+        self.assertEqual(row_text(cv, 2)[5:8], " T ")
+
+    def test_fill_style_explicit(self):
+        cv = Canvas(10, 5)
+        cv.region(style="BG").popup(0, 0, 5, 10, fill_style="F")
+        self.assertEqual(cv.grid[1][1].style, "F")
+
+    def test_custom_chars(self):
+        cv = Canvas(10, 5)
+        cv.region().popup(0, 0, 4, 8, chars=HEAVY)
+        self.assertEqual(cv.grid[0][0].ch, HEAVY["tl"])
+
+    def test_swallows_clicks_under_overlay(self):
+        hits = HitMap()
+        cv = Canvas(12, 8)
+        rg = cv.region(hits=hits)
+        rg.hit("under")                     # full-screen underlying hit
+        rg.popup(2, 2, 4, 8)
+        act = hits.lookup(3, 4)             # inside the popup
+        self.assertTrue(callable(act))
+        self.assertIsNone(act())            # the no-op swallow
+        self.assertTrue(callable(hits.lookup(2, 2)))     # border too
+        self.assertEqual(hits.lookup(0, 0), "under")     # outside: alive
+
+    def test_content_hits_added_after_win(self):
+        hits = HitMap()
+        cv = Canvas(12, 8)
+        inner = cv.region(hits=hits).popup(1, 1, 5, 10)
+        inner.hit("btn", r=0, c=0, h=1, w=4)
+        self.assertEqual(hits.lookup(2, 2), "btn")
+        self.assertTrue(callable(hits.lookup(3, 2)))
+
+    def test_no_hitmap_registers_nothing(self):
+        cv = Canvas(10, 6)
+        inner = cv.region().popup(1, 1, 4, 8)   # must not raise
+        self.assertEqual((inner.h, inner.w), (2, 6))
+
+    def test_swallow_clipped_to_visible(self):
+        hits = HitMap()
+        cv = Canvas(10, 6)
+        cv.region(hits=hits).popup(4, 4, 6, 10)   # sticks out bottom-right
+        self.assertTrue(callable(hits.lookup(5, 9)))
+        self.assertIsNone(hits.lookup(3, 4))
+
+    def test_modal_centers(self):
+        hits = HitMap()
+        cv = Canvas(20, 12)
+        inner = cv.region(hits=hits).modal(6, 10, title="M")
+        self.assertEqual(inner.rect, Rect(4, 6, 4, 8))
+        self.assertTrue(callable(hits.lookup(3, 5)))   # popup border
+        self.assertIsNone(hits.lookup(2, 5))           # just outside
+
+    def test_modal_larger_than_region_clamps_origin(self):
+        cv = Canvas(10, 6)
+        inner = cv.region().modal(10, 14)
+        self.assertEqual(inner.rect, Rect(1, 1, 8, 12))
+
+
+class _Edit:
+    """Stand-in for interact.LineEdit: just .text and .cursor."""
+
+    def __init__(self, text="", cursor=None):
+        self.text = text
+        self.cursor = len(text) if cursor is None else cursor
+
+
+class TestInput(unittest.TestCase):
+    def test_prompt_text_and_cursor_block(self):
+        cv = Canvas(20, 1)
+        cx = cv.region().input(_Edit("hello"), prompt="> ", style="S")
+        self.assertEqual(row_text(cv, 0).rstrip(), "> hello")
+        self.assertEqual(cx, 7)
+        self.assertEqual(cv.grid[0][2].style, "S")
+        self.assertEqual(cv.grid[0][7].ch, " ")
+        self.assertEqual(cv.grid[0][7].style, "S" + term.REVERSE)
+
+    def test_cursor_mid_text(self):
+        cv = Canvas(20, 1)
+        cx = cv.region().input(_Edit("hello", 1), prompt="> ", style="S")
+        self.assertEqual(cx, 3)
+        self.assertEqual(cv.grid[0][3].ch, "e")
+        self.assertEqual(cv.grid[0][3].style, "S" + term.REVERSE)
+        self.assertEqual(cv.grid[0][4].style, "S")
+
+    def test_explicit_cursor_style(self):
+        cv = Canvas(10, 1)
+        cv.region().input(_Edit("a", 0), cursor_style="C")
+        self.assertEqual(cv.grid[0][0].style, "C")
+
+    def test_scrolls_to_keep_cursor_at_end_visible(self):
+        cv = Canvas(6, 1)
+        cx = cv.region().input(_Edit("abcdefghij"))
+        self.assertEqual(row_text(cv, 0), "fghij ")
+        self.assertEqual(cx, 5)
+        self.assertEqual(cv.grid[0][5].style, term.REVERSE)
+
+    def test_scroll_cursor_inside_buffer(self):
+        cv = Canvas(6, 1)
+        cx = cv.region().input(_Edit("abcdefghij", 7))
+        self.assertEqual(row_text(cv, 0), "cdefgh")
+        self.assertEqual(cx, 5)
+        self.assertEqual(cv.grid[0][5].ch, "h")
+        self.assertEqual(cv.grid[0][5].style, term.REVERSE)
+
+    def test_no_scroll_when_it_fits(self):
+        cv = Canvas(10, 1)
+        cv.region().input(_Edit("abc", 0))
+        self.assertEqual(row_text(cv, 0).rstrip(), "abc")
+        self.assertEqual(cv.grid[0][0].style, term.REVERSE)
+
+    def test_ghost_suffix_dim_with_cursor_on_first_char(self):
+        cv = Canvas(12, 1)
+        cx = cv.region().input(_Edit("gr"), style="S", ghost="oups")
+        self.assertEqual(row_text(cv, 0).rstrip(), "groups")
+        self.assertEqual(cx, 2)
+        self.assertEqual(cv.grid[0][2].ch, "o")
+        self.assertEqual(cv.grid[0][2].style, "S" + term.REVERSE)
+        self.assertEqual(cv.grid[0][3].style, "S" + term.DIM)
+
+    def test_no_ghost_when_text_end_scrolled_off(self):
+        cv = Canvas(6, 1)
+        cv.region().input(_Edit("abcdefghij", 3), ghost="XY")
+        self.assertEqual(row_text(cv, 0), "abcdef")
+
+    def test_ghost_truncated_to_region(self):
+        cv = Canvas(8, 1)
+        cv.region().input(_Edit("ab"), ghost="cdefghij")
+        self.assertEqual(row_text(cv, 0)[:2], "ab")
+        self.assertEqual(cv.grid[0][2].ch, "c")   # cursor over ghost[0]
+
+    def test_empty_buffer_cursor_at_origin(self):
+        cv = Canvas(6, 1)
+        cx = cv.region().input(_Edit(""))
+        self.assertEqual(cx, 0)
+        self.assertEqual(cv.grid[0][0].style, term.REVERSE)
+
+    def test_prompt_fills_region_no_crash(self):
+        cv = Canvas(4, 1)
+        cx = cv.region().input(_Edit("abc"), prompt="::::")
+        self.assertEqual(cx, 4)
+
+    def test_row_parameter(self):
+        cv = Canvas(8, 3)
+        cv.region().input(_Edit("x", 0), r=2)
+        self.assertEqual(cv.grid[2][0].ch, "x")
+
+    def test_style_objects_normalized(self):
+        st = Style(fg=(1, 2, 3))
+        cv = Canvas(10, 1)
+        cv.region().input(_Edit("a", 1), prompt=">", style=st)
+        self.assertEqual(cv.grid[0][0].style, str(st))
+        self.assertEqual(cv.grid[0][2].style, str(st) + term.REVERSE)
 
 
 if __name__ == "__main__":
