@@ -289,11 +289,15 @@ class App:
         Per iteration: absorb resizes, sync the terminal's mouse mode to
         self.mouse_enabled, expire toasts, tick the animation clock, and
         repaint if dirty — the first frame renders before the first key
-        wait — then poll for input and dispatch it.
+        wait — then poll for input and dispatch it. The frame canvas is
+        allocated once per terminal size and clear()ed in place between
+        frames rather than reallocated.
         """
         renderer = Renderer()
         timeout = _timeout(self.fps)
         last_tick = 0.0
+        cv = None
+        cv_size = None
         try:
             with RawTerminal(mouse=self.mouse_enabled) as tw:
                 while self.running:
@@ -315,8 +319,13 @@ class App:
                         with self.lock:
                             self.frame += 1
                             self.hits.clear()
-                            cv = Canvas(cols, rows, self.theme_base_style or
-                                        widgets.base_style())
+                            base = (self.theme_base_style or
+                                    widgets.base_style())
+                            if cv is None or cv_size != (cols, rows):
+                                cv = Canvas(cols, rows, base)
+                                cv_size = (cols, rows)
+                            else:
+                                cv.clear(base)
                             frame_fn(cv.region(hits=self.hits), self)
                             renderer.render(cv.to_lines(), (cols, rows))
                         self.dirty = False

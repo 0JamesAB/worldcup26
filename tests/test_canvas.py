@@ -2,7 +2,7 @@
 
 import unittest
 
-from tui.canvas import Canvas, LIGHT
+from tui.canvas import Canvas, HEAVY, LIGHT
 from tui.term import RESET
 
 
@@ -360,3 +360,93 @@ class TestBlitClipEdgeTears(unittest.TestCase):
         dst = Canvas(3, 1)
         dst.blit(src, 0, 2)            # lead lands in dst's last column
         self.assertEqual(dst.grid[0][2].ch, "ａ")
+
+
+class TestClear(unittest.TestCase):
+    """clear(): the in-place frame reset must leave the canvas
+    indistinguishable from a freshly allocated one."""
+
+    W, H = 10, 4
+
+    def _dirty(self, cv):
+        """An arbitrary prior frame: styles, boxes, wide glyphs, and a
+        torn edge (lead-only wide glyph in the last column)."""
+        cv.fill_rect(0, 0, self.H, self.W, "D0", ch="#")
+        cv.box(0, 0, 4, 8, "D1", chars=HEAVY, title="old", fill_style="D2")
+        cv.put(1, 1, "日本語", "D3")
+        cv.put(2, self.W - 1, "日", "D4")   # legacy lead-only at canvas edge
+        cv.hline(3, 0, self.W, "D5", "=")
+
+    def _compose_boxes(self, cv):
+        cv.box(0, 0, 4, 10, "B", chars=LIGHT, title="T", fill_style="F")
+        cv.box(1, 5, 3, 5, "S", chars=HEAVY)
+
+    def _compose_wide(self, cv):
+        cv.put(0, 0, "日本語", "W")
+        cv.put(1, 8, "日", "W")                    # torn edge: lead-only
+        cv.put(2, 0, "ab日", "W", clip=(0, 0, 3, 3))  # straddler dropped
+        cv.put(3, 1, "x日y", "S")
+
+    def _compose_styled(self, cv):
+        cv.put(0, 0, "ab", "S1")
+        cv.put(0, 2, "cd", "S2")
+        cv.fill_rect(1, 1, 2, 4, "S3", ch="@")
+        cv.hline(3, 0, 9, "S4", "-")
+        cv.vline(0, 9, 4, "S5", "|")
+
+    def assert_equiv(self, compose):
+        fresh = Canvas(self.W, self.H)
+        used = Canvas(self.W, self.H)
+        self._dirty(used)
+        used.clear()
+        compose(fresh)
+        compose(used)
+        self.assertEqual(fresh.to_lines(), used.to_lines())
+
+    def test_boxes_equivalent_to_fresh(self):
+        self.assert_equiv(self._compose_boxes)
+
+    def test_wide_glyphs_equivalent_to_fresh(self):
+        self.assert_equiv(self._compose_wide)
+
+    def test_styled_runs_equivalent_to_fresh(self):
+        self.assert_equiv(self._compose_styled)
+
+    def test_cont_flags_and_chars_reset(self):
+        cv = Canvas(4, 1, "BG")
+        cv.put(0, 0, "日日", "S")
+        cv.clear()
+        for c in cv.grid[0]:
+            self.assertEqual(c.ch, " ")
+            self.assertEqual(c.style, "BG")
+            self.assertFalse(c.cont)
+
+    def test_clear_matches_blank_fresh_canvas(self):
+        used = Canvas(6, 3, "BG")
+        self._compose_styled(used)
+        used.clear()
+        self.assertEqual(used.to_lines(), Canvas(6, 3, "BG").to_lines())
+
+    def test_clear_with_bg_updates_default(self):
+        cv = Canvas(6, 3, "OLD")
+        cv.put(0, 0, "x", "S")
+        cv.clear("NEW")
+        self.assertEqual(cv.bg, "NEW")
+        self.assertEqual(cv.to_lines(), Canvas(6, 3, "NEW").to_lines())
+        # the new default persists across a later bare clear()
+        cv.put(1, 1, "y", "S")
+        cv.clear()
+        self.assertEqual(cv.to_lines(), Canvas(6, 3, "NEW").to_lines())
+
+    def test_clear_without_bg_keeps_default(self):
+        cv = Canvas(6, 3, "BG")
+        cv.clear()
+        self.assertEqual(cv.bg, "BG")
+
+    def test_no_reallocation(self):
+        cv = Canvas(self.W, self.H)
+        self._dirty(cv)
+        before = [id(c) for row in cv.grid for c in row]
+        cv.clear("NEW")
+        after = [id(c) for row in cv.grid for c in row]
+        self.assertEqual(before, after)

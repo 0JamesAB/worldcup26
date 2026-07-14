@@ -6,6 +6,7 @@ from unittest import mock
 
 import tui.app
 from tui.app import App, Toast, Toasts, _timeout, run
+from tui.canvas import Canvas
 from tui.region import Region
 from tui.term import Key, MouseEvent
 
@@ -642,6 +643,67 @@ class AppRunCase(unittest.TestCase):
             app.run(_noop_render)
         self.assertEqual(FakeRenderer.last.resets, 1)
         self.assertEqual(len(FakeRenderer.last.frames), 2)
+
+
+class AppRunCanvasReuseCase(unittest.TestCase):
+    """App.run keeps ONE canvas per size: the same object is reused (and
+    clear()ed) across frames, and only a size change allocates a new one."""
+
+    def drive(self, app, keys, frame_fn, size=(30, 8)):
+        keys = list(keys)
+        self.size = list(size)
+
+        def fake_read_key(timeout=0.2):
+            if not keys:
+                raise KeyboardInterrupt
+            return keys.pop(0)
+
+        with mock.patch.multiple(
+                tui.app,
+                RawTerminal=FakeRawTerminal,
+                Renderer=FakeRenderer,
+                read_key=fake_read_key,
+                terminal_size=lambda: tuple(self.size)):
+            app.run(frame_fn)
+        return FakeRenderer.last
+
+    def _recording_frame_fn(self, canvases):
+        def frame_fn(root, a):
+            canvases.append(root._cv)
+        return frame_fn
+
+    def test_same_canvas_object_across_frames(self):
+        app = App()
+        canvases = []
+        app.bind({"a": lambda: None, "q": app.quit})
+        self.drive(app, ["a", "q"], self._recording_frame_fn(canvases))
+        self.assertEqual(len(canvases), 2)   # key press repaints frame 2
+        self.assertIs(canvases[0], canvases[1])
+
+    def test_new_canvas_object_after_resize(self):
+        app = App()
+        canvases = []
+        app.bind({"r": lambda: self.size.__setitem__(0, 44),
+                  "q": app.quit})
+        self.drive(app, ["r", "q"], self._recording_frame_fn(canvases))
+        self.assertEqual(len(canvases), 2)
+        self.assertIsNot(canvases[0], canvases[1])
+        self.assertEqual((canvases[0].w, canvases[0].h), (30, 8))
+        self.assertEqual((canvases[1].w, canvases[1].h), (44, 8))
+
+    def test_canvas_cleared_between_frames(self):
+        app = App(theme_base_style="BASE")
+
+        def frame_fn(root, a):
+            if a.frame == 1:
+                root.put(0, 0, "hi", "S")
+
+        app.bind({"a": lambda: None, "q": app.quit})
+        renderer = self.drive(app, ["a", "q"], frame_fn)
+        self.assertEqual(len(renderer.frames), 2)
+        blank = Canvas(30, 8, "BASE").to_lines()
+        self.assertNotEqual(renderer.frames[0][0], blank)  # frame 1 drew
+        self.assertEqual(renderer.frames[1][0], blank)     # frame 2 reset
 
 
 if __name__ == "__main__":

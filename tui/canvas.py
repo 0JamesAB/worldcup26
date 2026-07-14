@@ -41,6 +41,22 @@ class Canvas:
         self.grid = [[Cell(" ", bg_style) for _ in range(self.w)]
                      for _ in range(self.h)]
 
+    def clear(self, bg_style=None):
+        """Reset every cell in place to a blank in the background style.
+
+        With `bg_style`, that style also becomes the new default background
+        (`self.bg`). No Cell objects are reallocated — this is the per-frame
+        fast path that lets a frame loop reuse one canvas.
+        """
+        if bg_style is not None:
+            self.bg = bg_style
+        style = self.bg
+        for row in self.grid:
+            for c in row:
+                c.ch = " "
+                c.style = style
+                c.cont = False
+
     def fill(self, style):
         for row in self.grid:
             for c in row:
