@@ -95,6 +95,67 @@ class TestHexRgb(unittest.TestCase):
             term.set_color_depth(saved)
 
 
+class TestFgBgInterning(DepthCase):
+    """fg()/bg() intern their formatted strings per (r, g, b); the cache is
+    depth-scoped and must be cleared whenever set_color_depth flips depth."""
+
+    def test_repeat_call_returns_same_object(self):
+        term.set_color_depth("truecolor")
+        first = term.fg(240, 196, 88)
+        self.assertIs(term.fg(240, 196, 88), first)
+        firstb = term.bg(10, 20, 30)
+        self.assertIs(term.bg(10, 20, 30), firstb)
+
+    def test_cached_value_equals_expected_bytes(self):
+        term.set_color_depth("truecolor")
+        for _ in range(2):  # second call comes from the cache
+            self.assertEqual(term.fg(255, 0, 0), "\x1b[38;2;255;0;0m")
+            self.assertEqual(term.bg(0, 0, 255), "\x1b[48;2;0;0;255m")
+
+    def test_clamped_inputs_share_cache_entry(self):
+        term.set_color_depth("truecolor")
+        self.assertIs(term.fg(-5, 300, 10), term.fg(0, 255, 10))
+
+    def test_depth_flip_changes_output_and_drops_old_cache(self):
+        term.set_color_depth("truecolor")
+        tc = term.fg(255, 0, 0)
+        self.assertEqual(tc, "\x1b[38;2;255;0;0m")
+        term.set_color_depth("256")
+        v256 = term.fg(255, 0, 0)
+        self.assertEqual(v256, f"\x1b[38;5;{16 + 36 * 5}m")
+        self.assertNotEqual(v256, tc)
+        term.set_color_depth("16")
+        self.assertEqual(term.fg(255, 0, 0), "\x1b[91m")
+        term.set_color_depth("mono")
+        self.assertEqual(term.fg(255, 0, 0), "")
+        # And back: no stale entry from any earlier depth survives.
+        term.set_color_depth("truecolor")
+        self.assertEqual(term.fg(255, 0, 0), "\x1b[38;2;255;0;0m")
+
+    def test_bg_depth_flip_not_reused(self):
+        term.set_color_depth("truecolor")
+        tc = term.bg(255, 0, 0)
+        term.set_color_depth("16")
+        self.assertEqual(term.bg(255, 0, 0), "\x1b[101m")
+        self.assertNotEqual(term.bg(255, 0, 0), tc)
+
+    def test_set_color_depth_clears_cache_dicts(self):
+        term.set_color_depth("truecolor")
+        term.fg(1, 2, 3)
+        term.bg(4, 5, 6)
+        self.assertTrue(term._FG_CACHE)
+        self.assertTrue(term._BG_CACHE)
+        term.set_color_depth("256")
+        self.assertEqual(term._FG_CACHE, {})
+        self.assertEqual(term._BG_CACHE, {})
+
+    def test_mono_empty_string_is_cached_correctly(self):
+        term.set_color_depth("mono")
+        self.assertEqual(term.fg(9, 9, 9), "")
+        self.assertEqual(term.fg(9, 9, 9), "")  # cached "" must stay ""
+        self.assertEqual(term.bg(9, 9, 9), "")
+
+
 class TestDetection(unittest.TestCase):
     def test_no_color_forces_mono(self):
         with mock.patch.dict(os.environ, {"NO_COLOR": "1"}):

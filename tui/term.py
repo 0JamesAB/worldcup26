@@ -14,6 +14,7 @@ No third-party dependencies.
 """
 
 import base64
+import functools
 import os
 import sys
 import select
@@ -49,11 +50,19 @@ def get_color_depth():
 
 
 def set_color_depth(depth):
-    """Override detection: 'truecolor', '256', '16', or 'mono'."""
+    """Override detection: 'truecolor', '256', '16', or 'mono'.
+
+    This is the required mutation path for COLOR_DEPTH: it also clears the
+    fg()/bg() result caches, which are keyed by (r, g, b) only and so are
+    valid for exactly one depth. Assigning term.COLOR_DEPTH directly would
+    leave stale entries behind.
+    """
     global COLOR_DEPTH
     if depth not in ("truecolor", "256", "16", "mono"):
         raise ValueError(f"bad color depth: {depth!r}")
     COLOR_DEPTH = depth
+    _FG_CACHE.clear()
+    _BG_CACHE.clear()
 
 
 ESC = "\x1b"
@@ -101,28 +110,54 @@ def _rgb_to_16(r, g, b):
     return best
 
 
+# Result-interning caches for fg()/bg(), keyed by clamped (r, g, b).
+#
+# These are explicit dicts cleared by set_color_depth() rather than an
+# lru_cache on fg/bg themselves: an lru_cache would key only on the rgb
+# arguments, so entries formatted under one COLOR_DEPTH would be served
+# verbatim after the depth changed (unless depth were threaded through as
+# an extra argument at every call site). The explicit-dict route keeps the
+# public fg(r, g, b) signature and makes the invalidation point obvious.
+_FG_CACHE = {}
+_BG_CACHE = {}
+
+
 def fg(r, g, b):
     r, g, b = _clamp(r), _clamp(g), _clamp(b)
+    key = (r, g, b)
+    s = _FG_CACHE.get(key)
+    if s is not None:
+        return s
     if COLOR_DEPTH == "truecolor":
-        return f"{CSI}38;2;{r};{g};{b}m"
-    if COLOR_DEPTH == "256":
-        return f"{CSI}38;5;{_rgb_to_256(r, g, b)}m"
-    if COLOR_DEPTH == "16":
+        s = f"{CSI}38;2;{r};{g};{b}m"
+    elif COLOR_DEPTH == "256":
+        s = f"{CSI}38;5;{_rgb_to_256(r, g, b)}m"
+    elif COLOR_DEPTH == "16":
         i = _rgb_to_16(r, g, b)
-        return f"{CSI}{30 + i if i < 8 else 90 + (i - 8)}m"
-    return ""  # mono
+        s = f"{CSI}{30 + i if i < 8 else 90 + (i - 8)}m"
+    else:
+        s = ""  # mono
+    _FG_CACHE[key] = s
+    return s
 
 
 def bg(r, g, b):
     r, g, b = _clamp(r), _clamp(g), _clamp(b)
+    key = (r, g, b)
+    s = _BG_CACHE.get(key)
+    if s is not None:
+        return s
     if COLOR_DEPTH == "truecolor":
-        return f"{CSI}48;2;{r};{g};{b}m"
-    if COLOR_DEPTH == "256":
-        return f"{CSI}48;5;{_rgb_to_256(r, g, b)}m"
-    if COLOR_DEPTH == "16":
+        s = f"{CSI}48;2;{r};{g};{b}m"
+    elif COLOR_DEPTH == "256":
+        s = f"{CSI}48;5;{_rgb_to_256(r, g, b)}m"
+    elif COLOR_DEPTH == "16":
         i = _rgb_to_16(r, g, b)
-        return f"{CSI}{40 + i if i < 8 else 100 + (i - 8)}m"
-    return ""  # mono
+        s = f"{CSI}{40 + i if i < 8 else 100 + (i - 8)}m"
+    else:
+        s = ""  # mono
+    _BG_CACHE[key] = s
+    return s
 
 
 def hex_rgb(h):
@@ -245,6 +280,7 @@ def strip_ansi(s):
     return _SGR_RE.sub("", s)
 
 
+@functools.lru_cache(maxsize=1024)
 def char_width(ch):
     if unicodedata.combining(ch):
         return 0
@@ -259,7 +295,12 @@ def char_width(ch):
 
 def display_width(s):
     """Visible width of a string, ignoring ANSI codes."""
-    return sum(char_width(c) for c in strip_ansi(s))
+    s = strip_ansi(s)
+    if s.isascii():
+        # Fast path: every wide (East Asian W/F, emoji) and combining
+        # character is non-ASCII, so ASCII width == length.
+        return len(s)
+    return sum(char_width(c) for c in s)
 
 
 def truncate(s, width, ellipsis="…"):
@@ -701,13 +742,15 @@ class Renderer:
     """
 
     def __init__(self, sync=True):
-        self._prev = []
+        self._prev = []      # previous frame, padded to width (emit cache)
+        self._prev_raw = []  # previous frame, raw pre-pad lines (memo keys)
         self._size = (0, 0)
         self._sync = sync
 
     def reset(self):
         """Force a full repaint on the next render (e.g. after resize)."""
         self._prev = []
+        self._prev_raw = []
         sys.stdout.write(f"{CSI}2J")
 
     def render(self, lines, size):
@@ -715,17 +758,30 @@ class Renderer:
         if size != self._size:
             self.reset()
             self._size = size
-        # Normalize to exactly `rows` lines, each padded/truncated to cols.
+        # Raw-line memo: padding every line dominates the frame cost, so
+        # lines whose raw text is unchanged skip pad+compare+emit entirely
+        # (same raw at the same width pads to the same string). Only
+        # changed lines are padded and diffed against the previous padded
+        # frame, and their padded form is cached so the NEXT frame's
+        # comparison stays valid. First frames (and post-reset frames)
+        # have no memo, so they emit exactly what they always did.
+        prev, prev_raw = self._prev, self._prev_raw
         frame = []
+        frame_raw = []
+        out = []
         for i in range(rows):
             raw = lines[i] if i < len(lines) else ""
-            frame.append(pad(raw, cols))
-        out = []
-        for i, line in enumerate(frame):
-            if i >= len(self._prev) or self._prev[i] != line:
+            if i < len(prev_raw) and prev_raw[i] == raw:
+                frame.append(prev[i])
+                frame_raw.append(raw)
+                continue
+            line = pad(raw, cols)
+            if i >= len(prev) or prev[i] != line:
                 out.append(move(i + 1, 1))
                 out.append(line)
                 out.append(clear_to_eol())
+            frame.append(line)
+            frame_raw.append(raw)
         if out:
             payload = "".join(out)
             if self._sync:
@@ -733,3 +789,4 @@ class Renderer:
             sys.stdout.write(payload)
             sys.stdout.flush()
         self._prev = frame
+        self._prev_raw = frame_raw

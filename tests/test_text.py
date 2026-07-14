@@ -149,6 +149,144 @@ class TestRendererSync(unittest.TestCase):
         self.assertEqual(out, "")
 
 
+class TestRendererRawLineMemo(unittest.TestCase):
+    """The raw-line memo may only SKIP work for unchanged lines: repeated
+    frames emit zero bytes, and changed-line transitions emit exactly the
+    bytes a fresh (memo-less) Renderer emits for the same transition."""
+
+    def _render(self, renderer, lines, size):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            renderer.render(lines, size)
+        return buf.getvalue()
+
+    SIZE = (20, 4)
+    FRAME_A = ["\x1b[1mheader\x1b[0m", "alpha", "beta \x1b[31mred\x1b[0m"]
+    FRAME_B = ["\x1b[1mheader\x1b[0m", "ALPHA!", "beta \x1b[31mred\x1b[0m"]
+
+    def test_identical_frame_emits_zero_bytes(self):
+        r = term.Renderer(sync=True)
+        self._render(r, list(self.FRAME_A), self.SIZE)
+        out = self._render(r, list(self.FRAME_A), self.SIZE)
+        self.assertEqual(out, "")
+
+    def test_changed_line_matches_fresh_renderer_transition(self):
+        # Memoized renderer: A, A (no-op), then B with one changed line.
+        r = term.Renderer(sync=True)
+        self._render(r, list(self.FRAME_A), self.SIZE)
+        self._render(r, list(self.FRAME_A), self.SIZE)
+        memo_out = self._render(r, list(self.FRAME_B), self.SIZE)
+
+        # Fresh renderer doing the same A -> B transition directly.
+        fresh = term.Renderer(sync=True)
+        self._render(fresh, list(self.FRAME_A), self.SIZE)
+        fresh_out = self._render(fresh, list(self.FRAME_B), self.SIZE)
+
+        self.assertEqual(memo_out, fresh_out)
+        # Only the changed row is repainted.
+        self.assertIn("ALPHA!", memo_out)
+        self.assertNotIn("alpha", memo_out)
+        self.assertNotIn("header", memo_out)
+
+    def test_first_frame_bytes_unchanged_by_memo(self):
+        # Two fresh renderers painting the same first frame emit identical
+        # bytes: the memo never alters a cold start.
+        out1 = self._render(term.Renderer(sync=True),
+                            list(self.FRAME_A), self.SIZE)
+        out2 = self._render(term.Renderer(sync=True),
+                            list(self.FRAME_A), self.SIZE)
+        self.assertEqual(out1, out2)
+        for row in ("header", "alpha", "beta"):
+            self.assertIn(row, out1)
+
+    def test_raw_differs_padded_equal_emits_nothing(self):
+        # "hi " and "hi" pad to the same 10-column string; the raw memo
+        # misses but the padded diff must still suppress the emit.
+        r = term.Renderer(sync=True)
+        self._render(r, ["hi "], (10, 1))
+        out = self._render(r, ["hi"], (10, 1))
+        self.assertEqual(out, "")
+        # And the padded cache stays valid for the next frame.
+        out = self._render(r, ["hi"], (10, 1))
+        self.assertEqual(out, "")
+
+    def test_reset_clears_memo_and_repaints_fully(self):
+        r = term.Renderer(sync=True)
+        self._render(r, list(self.FRAME_A), self.SIZE)
+        buf_reset = io.StringIO()
+        with contextlib.redirect_stdout(buf_reset):
+            r.reset()
+        self.assertIn("\x1b[2J", buf_reset.getvalue())
+        out = self._render(r, list(self.FRAME_A), self.SIZE)
+        for row in ("header", "alpha", "beta"):
+            self.assertIn(row, out)
+
+    def test_resize_clears_memo_and_repaints_fully(self):
+        r = term.Renderer(sync=True)
+        self._render(r, list(self.FRAME_A), self.SIZE)
+        out = self._render(r, list(self.FRAME_A), (30, 4))
+        for row in ("header", "alpha", "beta"):
+            self.assertIn(row, out)
+
+    def test_shorter_lines_list_pads_missing_rows(self):
+        r = term.Renderer(sync=True)
+        self._render(r, list(self.FRAME_A), self.SIZE)
+        out = self._render(r, list(self.FRAME_A[:1]), self.SIZE)
+        fresh = term.Renderer(sync=True)
+        self._render(fresh, list(self.FRAME_A), self.SIZE)
+        fresh_out = self._render(fresh, list(self.FRAME_A[:1]), self.SIZE)
+        self.assertEqual(out, fresh_out)
+        self.assertNotEqual(out, "")
+
+    def test_sync_wrapper_only_when_bytes_emitted(self):
+        r = term.Renderer(sync=True)
+        out = self._render(r, list(self.FRAME_A), self.SIZE)
+        self.assertIn("\x1b[?2026h", out)
+        self.assertIn("\x1b[?2026l", out)
+        self.assertEqual(self._render(r, list(self.FRAME_A), self.SIZE), "")
+
+
+class TestDisplayWidthAsciiFastPath(unittest.TestCase):
+    """The isascii() fast path must agree with the per-char slow path."""
+
+    CORPUS = [
+        "",
+        " ",
+        "hello world",
+        "0123456789 ~!@#$%^&*()_+-=[]{}|;:'\",.<>/?",
+        "tab\tand\nnewline",  # control chars: still ASCII, width by len()
+        "\x1b[1mbold ascii\x1b[0m",
+        "\x1b[38;2;10;20;30mcolored\x1b[0m plain",
+        "日本語",
+        "a日b本c",
+        "\x1b[31m日\x1b[0m ascii tail",
+        "⚽ goal 🎉",
+        "café",          # combining acute
+        "é́x",      # stacked combining marks
+        "mixed 日 ⚽ é end",
+        "…ellipsis and — dashes",
+    ]
+
+    def _reference_width(self, s):
+        return sum(term.char_width(c) for c in term.strip_ansi(s))
+
+    def test_equivalence_over_mixed_corpus(self):
+        for s in self.CORPUS:
+            self.assertEqual(term.display_width(s), self._reference_width(s),
+                             msg=repr(s))
+
+    def test_ascii_width_is_stripped_length(self):
+        s = "\x1b[1mplain ascii\x1b[0m"
+        self.assertEqual(term.display_width(s), len("plain ascii"))
+
+    def test_char_width_cache_stable(self):
+        # lru_cache must not change results across repeated calls.
+        for ch in ("a", "日", "⚽", "́", "🎉"):
+            first = term.char_width(ch)
+            for _ in range(3):
+                self.assertEqual(term.char_width(ch), first)
+
+
 class TestMouseDecode(unittest.TestCase):
     def _decode(self, body):
         ev = term._decode_csi(b"[", body)
