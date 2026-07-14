@@ -26,6 +26,8 @@ from . import term, widgets
 from .canvas import LIGHT
 from .layout import Rect, hsplit, vsplit
 
+__all__ = ["Region"]
+
 
 def _sty(s, default=""):
     """Normalize a style (None, str, or Style) to an ANSI prefix string."""

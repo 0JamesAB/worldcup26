@@ -27,4 +27,4 @@
  09:02:37  INFO   GET /v1/auth 200 in 454ms                                                         
  09:02:39  INFO   GET /v1/search 200 in 276ms                                                       
  09:02:40  DEBUG  retry backoff 271ms for search                                                    
-  ↑↓  move   f  follow   Enter  open   /  filter   :  cmd   q  quit             logtail · tui 0.5.0 
+  ↑↓  move   f  follow   Enter  open   /  filter   :  cmd   q  quit        logtail · tui 0.6.0.dev0 

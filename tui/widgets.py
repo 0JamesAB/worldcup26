@@ -11,6 +11,26 @@ from .canvas import Canvas, LIGHT
 from .term import BOLD, fg, bg
 from .theme import get_theme
 
+__all__ = [
+    # theme-derived base styles
+    "base_style", "panel_style",
+    # bars and chrome
+    "tab_bar", "footer", "center", "center_msg",
+    # color / gradient helpers
+    "lerp_rgb", "gradient_put",
+    # meters and tables
+    "draw_hbar", "split_fracs", "col_layout", "draw_table", "draw_card",
+    "draw_duel_row",
+    # single-elimination bracket
+    "bracket_layout", "draw_bracket", "draw_connector",
+    # small widgets
+    "SPARK_CHARS", "SPINNER_DOTS", "SPINNER_LINE",
+    "sparkline", "draw_sparkline", "spinner", "draw_progress",
+    "draw_badge", "draw_rule",
+    # panes
+    "draw_text_pane", "draw_meter_rows",
+]
+
 
 def base_style(theme=None):
     t = theme or get_theme()

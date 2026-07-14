@@ -5,7 +5,7 @@ a styled cell-grid Canvas, raw keyboard input with escape decoding, and
 a diff-based frame renderer. Pure stdlib.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0.dev0"
 
 from .term import (fg, bg, fg_hex, bg_hex, hex_rgb, style,
                    RESET, BOLD, DIM, ITALIC, UNDERLINE, BLINK, REVERSE,
@@ -13,8 +13,9 @@ from .term import (fg, bg, fg_hex, bg_hex, hex_rgb, style,
                    move, clear_to_eol, terminal_size,
                    get_color_depth, set_color_depth,
                    enter_alt_screen, exit_alt_screen,
+                   osc52_copy, set_title, set_cursor_shape,
                    RawTerminal, Key, read_key, Renderer,
-                   wrap, MouseEvent)
+                   wrap, MouseEvent, PasteEvent, FocusEvent)
 from .canvas import Canvas, Cell, LIGHT, HEAVY, DOUBLE
 from .region import Region
 from .theme import Theme, get_theme, set_theme, presets

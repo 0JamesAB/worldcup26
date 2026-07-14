@@ -17,6 +17,8 @@ mono depth; attributes remain).
 
 from . import term
 
+__all__ = ["Style"]
+
 _ATTRS = ("bold", "dim", "italic", "underline", "reverse", "blink")
 _ATTR_CODES = {
     "bold": term.BOLD,

@@ -23,6 +23,28 @@ import termios
 import tty
 from dataclasses import dataclass
 
+__all__ = [
+    # color depth
+    "get_color_depth", "set_color_depth",
+    # color helpers
+    "fg", "bg", "fg_hex", "bg_hex", "hex_rgb",
+    # SGR constants + style()
+    "RESET", "BOLD", "DIM", "ITALIC", "UNDERLINE", "BLINK", "REVERSE",
+    "NOBOLD", "style",
+    # raw sequence prefixes
+    "ESC", "CSI",
+    # cursor / screen control
+    "enter_alt_screen", "exit_alt_screen", "move", "clear_to_eol",
+    "terminal_size", "set_title", "osc52_copy", "set_cursor_shape",
+    # width-aware text utilities
+    "strip_ansi", "char_width", "display_width", "truncate", "pad", "wrap",
+    # raw input + events
+    "RawTerminal", "Key", "read_key",
+    "MouseEvent", "PasteEvent", "FocusEvent",
+    # frame renderer
+    "Renderer",
+]
+
 # ----------------------------------------------------------------------------
 # Color support detection
 # ----------------------------------------------------------------------------

@@ -14,6 +14,8 @@ keys on the class); subclass and `set_theme` instead.
 
 from . import term
 
+__all__ = ["Theme", "get_theme", "set_theme", "Styles", "presets"]
+
 
 class Theme:
     """Neutral default theme. Colors are (r, g, b) tuples."""

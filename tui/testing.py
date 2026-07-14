@@ -7,6 +7,9 @@ counters) with regexes, and compare frames line-by-line.
 
 import re
 
+__all__ = ["plain_lines", "render_plain", "styled_lines", "mask_text",
+           "frames_equal", "first_diff"]
+
 
 def plain_lines(canvas):
     """Return canvas rows as plain strings: characters only, no ANSI."""

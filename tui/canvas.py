@@ -9,6 +9,8 @@ coalesced into runs.
 from . import term
 from .term import RESET
 
+__all__ = ["Canvas", "Cell", "LIGHT", "HEAVY", "DOUBLE"]
+
 # Box-drawing sets
 LIGHT = dict(tl="╭", tr="╮", bl="╰", br="╯", h="─", v="│",
              lt="├", rt="┤", tt="┬", bt="┴", x="┼")

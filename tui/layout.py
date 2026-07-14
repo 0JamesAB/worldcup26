@@ -9,6 +9,8 @@ largest-remainder rule, min/max clamps are redistributed iteratively, and
 overflow degrades to zero-size Rects rather than ever going negative.
 """
 
+__all__ = ["Rect", "Fixed", "Flex", "vsplit", "hsplit"]
+
 
 class Rect:
     """A rectangle: row, col, height, width."""

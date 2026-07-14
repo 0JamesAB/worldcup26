@@ -34,6 +34,8 @@ from .interact import LineEdit
 from .term import Key
 from .theme import get_theme
 
+__all__ = ["CommandSet", "Palette", "draw_palette_bar", "draw_palette_menu"]
+
 
 class CommandSet:
     """A registry of command specs: lookup, completion, dispatch, help."""
