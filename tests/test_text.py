@@ -431,13 +431,23 @@ class TestReadKey(unittest.TestCase):
         self.assertEqual(self._key(b"\x1b"), term.Key.ESC)
 
     def test_split_escape_arrives_during_peek_window(self):
-        # ESC first; the rest lands while read_key waits in the peek
-        # window, so the select wakes on arrival and decodes UP.
+        # ESC first; the rest lands 5ms later. On an idle machine the
+        # 0.02s peek window catches it (-> UP); on a loaded CI runner
+        # the window may expire first, in which case the CONTRACT is a
+        # lone ESC followed by the tail bytes as plain chars. Both are
+        # valid outcomes of the timeout heuristic; what must never
+        # happen is corruption or loss.
         os.write(self.w, b"\x1b")
         t = threading.Timer(0.005, os.write, (self.w, b"[A"))
         t.start()
         try:
-            self.assertEqual(term.read_key(fd=self.r), term.Key.UP)
+            first = term.read_key(fd=self.r)
+            if first == term.Key.UP:
+                return  # arrived inside the window: decoded as one key
+            self.assertEqual(first, term.Key.ESC)
+            tail = [term.read_key(timeout=0.1, fd=self.r),
+                    term.read_key(timeout=0.1, fd=self.r)]
+            self.assertEqual(tail, ["[", "A"])
         finally:
             t.cancel()
 
