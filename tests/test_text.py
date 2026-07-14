@@ -2,6 +2,8 @@
 
 import contextlib
 import io
+import os
+import threading
 import unittest
 
 from tui import term
@@ -220,6 +222,122 @@ class TestSetMouse(unittest.TestCase):
         self.assertEqual(self._capture(lambda: tw.set_mouse(False)), "")
         self._capture(lambda: tw.set_mouse(True))
         self.assertEqual(self._capture(lambda: tw.set_mouse(True)), "")
+
+
+class TestReadKey(unittest.TestCase):
+    """read_key(fd=...) decoding, driven by byte streams over an os.pipe.
+
+    The write end stays open for the whole test so the pipe behaves like a
+    quiet terminal: reads past the written bytes time out instead of EOF."""
+
+    def setUp(self):
+        self.r, self.w = os.pipe()
+
+    def tearDown(self):
+        for fd in (self.r, self.w):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def _key(self, data=b"", timeout=0.2):
+        if data:
+            os.write(self.w, data)
+        return term.read_key(timeout=timeout, fd=self.r)
+
+    def test_timeout_returns_none(self):
+        self.assertIsNone(self._key(timeout=0.01))
+
+    def test_plain_char(self):
+        self.assertEqual(self._key(b"x"), "x")
+
+    def test_reads_one_key_at_a_time(self):
+        os.write(self.w, b"ab")
+        self.assertEqual(term.read_key(fd=self.r), "a")
+        self.assertEqual(term.read_key(fd=self.r), "b")
+
+    def test_enter_tab_backspace(self):
+        self.assertEqual(self._key(b"\r"), term.Key.ENTER)
+        self.assertEqual(self._key(b"\n"), term.Key.ENTER)
+        self.assertEqual(self._key(b"\t"), term.Key.TAB)
+        self.assertEqual(self._key(b"\x7f"), term.Key.BACKSPACE)
+
+    def test_ctrl_c_raises(self):
+        os.write(self.w, b"\x03")
+        with self.assertRaises(KeyboardInterrupt):
+            term.read_key(fd=self.r)
+
+    def test_ctrl_letter(self):
+        self.assertEqual(self._key(b"\x12"), "CTRL_R")
+
+    def test_arrows_csi(self):
+        self.assertEqual(self._key(b"\x1b[A"), term.Key.UP)
+        self.assertEqual(self._key(b"\x1b[B"), term.Key.DOWN)
+        self.assertEqual(self._key(b"\x1b[C"), term.Key.RIGHT)
+        self.assertEqual(self._key(b"\x1b[D"), term.Key.LEFT)
+
+    def test_arrows_ss3(self):
+        self.assertEqual(self._key(b"\x1bOA"), term.Key.UP)
+        self.assertEqual(self._key(b"\x1bOD"), term.Key.LEFT)
+
+    def test_tilde_sequences(self):
+        self.assertEqual(self._key(b"\x1b[5~"), term.Key.PGUP)
+        self.assertEqual(self._key(b"\x1b[6~"), term.Key.PGDN)
+        self.assertEqual(self._key(b"\x1b[3~"), term.Key.DELETE)
+
+    def test_shift_tab(self):
+        self.assertEqual(self._key(b"\x1b[Z"), term.Key.SHIFT_TAB)
+
+    def test_bare_esc_times_out_to_esc(self):
+        # Write end stays open, so the 0.02s peek window expires.
+        self.assertEqual(self._key(b"\x1b"), term.Key.ESC)
+
+    def test_split_escape_arrives_during_peek_window(self):
+        # ESC first; the rest lands while read_key waits in the peek
+        # window, so the select wakes on arrival and decodes UP.
+        os.write(self.w, b"\x1b")
+        t = threading.Timer(0.005, os.write, (self.w, b"[A"))
+        t.start()
+        try:
+            self.assertEqual(term.read_key(fd=self.r), term.Key.UP)
+        finally:
+            t.cancel()
+
+    def test_split_escape_buffered_before_call(self):
+        # Whole sequence already queued when read_key starts: same result.
+        os.write(self.w, b"\x1b")
+        os.write(self.w, b"[A")
+        self.assertEqual(term.read_key(fd=self.r), term.Key.UP)
+
+    def test_mouse_press(self):
+        ev = self._key(b"\x1b[<0;10;5M")
+        self.assertIsInstance(ev, term.MouseEvent)
+        self.assertEqual((ev.row, ev.col, ev.button, ev.kind),
+                         (4, 9, "left", "press"))
+
+    def test_mouse_release(self):
+        ev = self._key(b"\x1b[<0;10;5m")
+        self.assertEqual((ev.row, ev.col, ev.button, ev.kind),
+                         (4, 9, "left", "release"))
+
+    def test_mouse_wheel(self):
+        ev = self._key(b"\x1b[<64;1;1M")
+        self.assertEqual((ev.row, ev.col, ev.button, ev.kind),
+                         (0, 0, "wheel_up", "wheel"))
+
+    def test_utf8_two_byte(self):
+        self.assertEqual(self._key("é".encode("utf-8")), "é")
+
+    def test_utf8_three_byte(self):
+        self.assertEqual(self._key("€".encode("utf-8")), "€")
+
+    def test_utf8_four_byte(self):
+        self.assertEqual(self._key("🎉".encode("utf-8")), "🎉")
+
+    def test_utf8_truncated_returns_none(self):
+        # Lead byte only: the 0.01s continuation window expires and the
+        # partial buffer fails to decode.
+        self.assertIsNone(self._key(b"\xc3"))
 
 
 if __name__ == "__main__":

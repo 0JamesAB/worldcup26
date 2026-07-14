@@ -13,6 +13,7 @@ Pure stdlib. Provides:
 No third-party dependencies.
 """
 
+import base64
 import os
 import sys
 import select
@@ -198,6 +199,38 @@ def terminal_size():
         return 80, 24
 
 
+def set_title(s):
+    """Set the terminal window title (OSC 2, BEL-terminated)."""
+    sys.stdout.write(f"\x1b]2;{s}\x07")
+    sys.stdout.flush()
+
+
+def osc52_copy(text):
+    """Copy `text` to the system clipboard via OSC 52 (BEL-terminated).
+
+    Works over SSH and inside tmux (with `set-clipboard on`); terminals
+    that don't support OSC 52 simply ignore the sequence.
+    """
+    payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    sys.stdout.write(f"\x1b]52;c;{payload}\x07")
+    sys.stdout.flush()
+
+
+# DECSCUSR shape codes (steady variants; blink is one less).
+_CURSOR_SHAPES = {"block": 2, "underline": 4, "bar": 6}
+
+
+def set_cursor_shape(shape, blink=False):
+    """Set the cursor shape via DECSCUSR: 'block', 'underline', or 'bar'."""
+    n = _CURSOR_SHAPES.get(shape)
+    if n is None:
+        raise ValueError(f"bad cursor shape: {shape!r}")
+    if blink:
+        n -= 1
+    sys.stdout.write(f"{CSI}{n} q")
+    sys.stdout.flush()
+
+
 # ----------------------------------------------------------------------------
 # Width-aware helpers (so wide glyphs / colored strings line up)
 # ----------------------------------------------------------------------------
@@ -336,19 +369,36 @@ class RawTerminal:
     """Context manager: alt-screen + cbreak raw input + cursor hidden.
 
     With mouse=True, enables SGR mouse reporting (press/release + drag).
+    With focus=True, enables focus in/out reporting (mode 1004) so
+    read_key yields FocusEvent when the terminal window gains/loses focus.
+    With title=..., pushes the current window title, sets the given one,
+    and pops the original back on exit.
+    Bracketed paste (mode 2004) is always enabled so a paste arrives as a
+    single PasteEvent instead of a flood of keystrokes; terminals that
+    don't support it are unaffected.
     Restores the terminal on exit even if an exception propagates.
     """
 
-    def __init__(self, mouse=False):
+    def __init__(self, mouse=False, focus=False, title=None):
         self.fd = sys.stdin.fileno()
         self.old = None
         self.mouse = mouse
+        self.focus = focus
+        self.title = title
+        self._cursor_set = False
         self._resized = False
 
     def __enter__(self):
         self.old = termios.tcgetattr(self.fd)
         tty.setcbreak(self.fd)
         enter_alt_screen()
+        sys.stdout.write(f"{CSI}?2004h")      # bracketed paste (protective)
+        if self.focus:
+            sys.stdout.write(f"{CSI}?1004h")  # focus in/out reporting
+        if self.title is not None:
+            sys.stdout.write(f"{CSI}22;2t")   # push the current title
+            set_title(self.title)
+        sys.stdout.flush()
         if self.mouse:
             self.mouse = False
             self.set_mouse(True)
@@ -360,12 +410,25 @@ class RawTerminal:
 
     def __exit__(self, *exc):
         try:
+            if self._cursor_set:
+                sys.stdout.write(f"{CSI}0 q")    # default cursor shape
+            if self.title is not None:
+                sys.stdout.write(f"{CSI}23;2t")  # pop the saved title
+            if self.focus:
+                sys.stdout.write(f"{CSI}?1004l")
+            sys.stdout.write(f"{CSI}?2004l")
             self.set_mouse(False)
             exit_alt_screen()
         finally:
             if self.old is not None:
                 termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old)
         return False
+
+    def set_cursor_shape(self, shape, blink=False):
+        """Like term.set_cursor_shape, but remembered so __exit__ resets
+        the cursor to the terminal default."""
+        set_cursor_shape(shape, blink)
+        self._cursor_set = True
 
     def set_mouse(self, on):
         """Enable/disable SGR mouse reporting at runtime (no-op if unchanged).
@@ -406,6 +469,30 @@ class MouseEvent:
                 f"button={self.button!r}, kind={self.kind!r})")
 
 
+class PasteEvent:
+    """A bracketed paste (mode 2004): the pasted text as one event."""
+
+    __slots__ = ("text",)
+
+    def __init__(self, text):
+        self.text = text
+
+    def __repr__(self):
+        return f"PasteEvent(text={self.text!r})"
+
+
+class FocusEvent:
+    """A terminal focus change (mode 1004). gained=True on focus-in."""
+
+    __slots__ = ("gained",)
+
+    def __init__(self, gained):
+        self.gained = gained
+
+    def __repr__(self):
+        return f"FocusEvent(gained={self.gained})"
+
+
 # Key constants returned by read_key
 class Key:
     UP = "UP"
@@ -424,72 +511,134 @@ class Key:
     DELETE = "DELETE"
 
 
-def read_key(timeout=0.2):
+# Bracketed paste: body size cap and inner per-byte deadline.  Paste bytes
+# arrive in bulk, so the 0.02s between-bytes Esc heuristic must not apply;
+# a pause this long really means the end marker was lost.
+_PASTE_LIMIT = 1024 * 1024  # 1 MiB of body; the rest is drained and dropped
+_PASTE_TIMEOUT = 0.5
+_PASTE_END = b"\x1b[201~"
+
+
+class _KeyDecoder:
+    """Escape/UTF-8 key decoding driven by a `read(n, timeout)` callable.
+
+    The callable blocks up to `timeout` seconds for input and returns at
+    most `n` bytes (b"" on timeout).  Separating the decoding logic from
+    the fd plumbing lets tests feed byte streams through an os.pipe.
+    """
+
+    def __init__(self, read):
+        self._read = read
+
+    def _read_paste(self):
+        """Consume a bracketed-paste body up to ESC[201~ -> PasteEvent.
+
+        Reads byte-at-a-time so nothing past the end marker is consumed
+        (keystrokes may be queued right behind the paste).  Embedded ESC
+        sequences are literal text, never decoded as keys.  The body is
+        capped at _PASTE_LIMIT bytes; the overflow (and the end marker)
+        is drained so it can't leak back in as keystrokes.
+        """
+        buf = bytearray()
+        end = _PASTE_END
+        while True:
+            c = self._read(1, _PASTE_TIMEOUT)
+            if not c:
+                break  # end marker lost; salvage what arrived
+            buf += c
+            if buf.endswith(end):
+                del buf[-len(end):]
+                break
+            if len(buf) >= _PASTE_LIMIT + len(end):
+                # Cap hit: keep the first _PASTE_LIMIT bytes, then drain
+                # the rest of the paste with a rolling end-marker window.
+                tail = bytes(buf[-len(end):])
+                del buf[_PASTE_LIMIT:]
+                while tail != end:
+                    c = self._read(1, _PASTE_TIMEOUT)
+                    if not c:
+                        break
+                    tail = (tail + c)[-len(end):]
+                break
+        return PasteEvent(bytes(buf).decode("utf-8", "replace"))
+
+    def read_key(self, timeout):
+        ch = self._read(1, timeout)
+        if not ch:
+            return None
+        b = ch[0]
+
+        if b == 0x1b:  # ESC - could start a sequence
+            # Peek for more bytes (very short window).
+            seq = self._read(1, 0.02)
+            if seq not in (b"[", b"O"):
+                return Key.ESC
+            # Read the rest of the sequence.
+            body = b""
+            while True:
+                c = self._read(1, 0.02)
+                if not c:
+                    break
+                body += c
+                if c.isalpha() or c == b"~":
+                    break
+            if seq == b"[" and body == b"200~":
+                return self._read_paste()  # bracketed paste start marker
+            return _decode_csi(seq, body)
+
+        if b in (0x0d, 0x0a):
+            return Key.ENTER
+        if b in (0x7f, 0x08):
+            return Key.BACKSPACE
+        if b == 0x09:
+            return Key.TAB
+        if b == 0x03:  # Ctrl-C
+            raise KeyboardInterrupt
+        if b < 0x20:
+            return f"CTRL_{chr(b + 0x40)}"  # e.g. CTRL_R
+
+        # UTF-8 multibyte: read continuation bytes.
+        if b >= 0x80:
+            extra = 0
+            if b >= 0xf0:
+                extra = 3
+            elif b >= 0xe0:
+                extra = 2
+            elif b >= 0xc0:
+                extra = 1
+            buf = ch
+            for _ in range(extra):
+                c = self._read(1, 0.01)
+                if not c:
+                    break
+                buf += c
+            try:
+                return buf.decode("utf-8")
+            except UnicodeDecodeError:
+                return None
+        return chr(b)
+
+
+def _fd_reader(fd):
+    """Wrap `fd` as the `read(n, timeout)` callable _KeyDecoder expects."""
+    def read(n, timeout):
+        r, _, _ = select.select([fd], [], [], timeout)
+        if not r:
+            return b""
+        return os.read(fd, n)
+    return read
+
+
+def read_key(timeout=0.2, fd=None):
     """Block up to `timeout` seconds for a keypress.
 
     Returns a Key.* constant, a single character, or None on timeout.
     Decodes the common CSI/SS3 escape sequences for arrows, etc.
+    `fd` defaults to sys.stdin.
     """
-    fd = sys.stdin.fileno()
-    r, _, _ = select.select([fd], [], [], timeout)
-    if not r:
-        return None
-    ch = os.read(fd, 1)
-    if not ch:
-        return None
-    b = ch[0]
-
-    if b == 0x1b:  # ESC - could start a sequence
-        # Peek for more bytes (very short window).
-        r2, _, _ = select.select([fd], [], [], 0.02)
-        if not r2:
-            return Key.ESC
-        seq = os.read(fd, 1)
-        if seq not in (b"[", b"O"):
-            return Key.ESC
-        # Read the rest of the sequence.
-        body = b""
-        while True:
-            r3, _, _ = select.select([fd], [], [], 0.02)
-            if not r3:
-                break
-            c = os.read(fd, 1)
-            body += c
-            if c.isalpha() or c == b"~":
-                break
-        return _decode_csi(seq, body)
-
-    if b in (0x0d, 0x0a):
-        return Key.ENTER
-    if b in (0x7f, 0x08):
-        return Key.BACKSPACE
-    if b == 0x09:
-        return Key.TAB
-    if b == 0x03:  # Ctrl-C
-        raise KeyboardInterrupt
-    if b < 0x20:
-        return f"CTRL_{chr(b + 0x40)}"  # e.g. CTRL_R
-
-    # UTF-8 multibyte: read continuation bytes.
-    if b >= 0x80:
-        extra = 0
-        if b >= 0xf0:
-            extra = 3
-        elif b >= 0xe0:
-            extra = 2
-        elif b >= 0xc0:
-            extra = 1
-        buf = ch
-        for _ in range(extra):
-            r4, _, _ = select.select([fd], [], [], 0.01)
-            if not r4:
-                break
-            buf += os.read(fd, 1)
-        try:
-            return buf.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-    return chr(b)
+    if fd is None:
+        fd = sys.stdin.fileno()
+    return _KeyDecoder(_fd_reader(fd)).read_key(timeout)
 
 
 def _decode_sgr_mouse(text):
@@ -515,6 +664,8 @@ def _decode_csi(intro, body):
     text = body.decode("latin-1", "replace")
     if intro == b"[" and text.startswith("<") and text[-1:] in ("M", "m"):
         return _decode_sgr_mouse(text)
+    if intro == b"[" and text in ("I", "O"):  # focus in/out (mode 1004)
+        return FocusEvent(text == "I")
     mapping_csi = {
         "A": Key.UP, "B": Key.DOWN, "C": Key.RIGHT, "D": Key.LEFT,
         "H": Key.HOME, "F": Key.END, "Z": Key.SHIFT_TAB,
