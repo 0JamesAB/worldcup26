@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 
 _FAR = datetime.max.replace(tzinfo=timezone.utc)
 
-from tui import commands, term, widgets
-from tui.canvas import LIGHT, HEAVY
-from tui.term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
+from puretui import commands, term, widgets
+from puretui.canvas import LIGHT, HEAVY
+from puretui.term import fg, bg, BOLD, DIM, ITALIC, RESET, fg_hex
 import espn
 import state as S
 from palette import P

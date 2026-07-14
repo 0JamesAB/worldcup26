@@ -2,8 +2,8 @@
 
 import unittest
 
-from tui.canvas import Canvas, HEAVY, LIGHT
-from tui.term import RESET
+from puretui.canvas import Canvas, HEAVY, LIGHT
+from puretui.term import RESET
 
 
 class TestPut(unittest.TestCase):
@@ -318,7 +318,7 @@ class TestBlitClipEdgeTears(unittest.TestCase):
 
     def _row_width(self, cv, r=0):
         import re
-        from tui import term
+        from puretui import term
         line = re.sub(r"\x1b\[[0-9;]*m", "", cv.to_lines()[r])
         return sum(term.char_width(ch) for ch in line)
 

@@ -1,6 +1,6 @@
 """Deterministic fuzz tests for the escape-sequence key decoder.
 
-Adversarial byte streams are fed through ``tui.term.read_key`` via an
+Adversarial byte streams are fed through ``puretui.term.read_key`` via an
 ``os.pipe`` whose write end is dribbled from a background thread in
 variable-size chunks with tiny sleeps, so the decoder's short inter-byte
 timeouts are exercised for real, not just the happy buffered path.
@@ -26,7 +26,7 @@ import threading
 import time
 import unittest
 
-from tui.term import FocusEvent, Key, MouseEvent, PasteEvent, read_key
+from puretui.term import FocusEvent, Key, MouseEvent, PasteEvent, read_key
 
 FIXED_SEEDS = (1337, 20260714, 8675309)
 ENV_SEED_DEFAULT = 0xF00D

@@ -2,14 +2,14 @@
 
 import unittest
 
-from tui import term
-from tui.canvas import Canvas
-from tui.commands import (CommandSet, Palette, draw_palette_bar,
+from puretui import term
+from puretui.canvas import Canvas
+from puretui.commands import (CommandSet, Palette, draw_palette_bar,
                           draw_palette_menu)
-from tui.interact import HitMap
-from tui.term import Key
-from tui.testing import render_plain
-from tui.theme import Theme
+from puretui.interact import HitMap
+from puretui.term import Key
+from puretui.testing import render_plain
+from puretui.theme import Theme
 
 
 def make_commands(log=None):

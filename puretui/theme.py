@@ -1,5 +1,5 @@
 """
-theme.py - Color theme for tui widgets.
+theme.py - Color theme for puretui widgets.
 
 A theme is a class with (r, g, b) tuple attributes. Subclass `Theme` to
 override colors or add your own; install it once at startup with

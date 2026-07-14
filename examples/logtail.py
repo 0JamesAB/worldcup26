@@ -21,15 +21,15 @@ import threading
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import tui
-from tui import term, widgets
-from tui.app import App
-from tui.canvas import Canvas
-from tui.commands import CommandSet, Palette, draw_palette_bar, draw_palette_menu
-from tui.interact import LineEdit, ListState, ScrollState
-from tui.layout import Fixed, Flex
-from tui.term import BOLD, Key, bg, fg
-from tui.theme import Theme
+import puretui
+from puretui import term, widgets
+from puretui.app import App
+from puretui.canvas import Canvas
+from puretui.commands import CommandSet, Palette, draw_palette_bar, draw_palette_menu
+from puretui.interact import LineEdit, ListState, ScrollState
+from puretui.layout import Fixed, Flex
+from puretui.term import BOLD, Key, bg, fg
+from puretui.theme import Theme
 
 MIN_COLS, MIN_ROWS = 60, 12
 DEFAULT_SEED = 2026
@@ -189,7 +189,7 @@ def draw_tail(root, app):
         widgets.footer(footer, 0, 0, footer.w,
                        [("↑↓", "move"), ("f", "follow"), ("Enter", "open"),
                         ("/", "filter"), (":", "cmd"), ("q", "quit")],
-                       right="logtail · tui " + tui.__version__, theme=t)
+                       right="logtail · tui " + puretui.__version__, theme=t)
 
 
 def draw_entry(root, app):

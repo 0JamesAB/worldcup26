@@ -20,9 +20,9 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from tui import term
-from tui import theme as tui_theme
-from tui.testing import first_diff, mask_text
+from puretui import term
+from puretui import theme as tui_theme
+from puretui.testing import first_diff, mask_text
 
 import fixtures_views as F
 import wc

@@ -1,5 +1,5 @@
 """
-state.py - Application state, the command registry feeding the tui command
+state.py - Application state, the command registry feeding the puretui command
 palette, and the background refresher thread that keeps live data flowing.
 """
 
@@ -8,8 +8,8 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import espn
-from tui.app import Toast, Toasts
-from tui.interact import ListState, ScrollState
+from puretui.app import Toast, Toasts
+from puretui.interact import ListState, ScrollState
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
@@ -35,7 +35,7 @@ def today_yyyymmdd():
 class AppState:
     def __init__(self):
         self.lock = threading.RLock()
-        # The tui.app.App this state is wired to (installed by
+        # The puretui.app.App this state is wired to (installed by
         # wc.build_app). Its view stack is the routing authority; the
         # `view`/`dirty` properties below read through to it, and fall
         # back to plain fields for standalone states (fixtures, tools).
@@ -220,7 +220,7 @@ class AppState:
 
 
 # ----------------------------------------------------------------------------
-# Command registry (tui.commands specs)
+# Command registry (puretui.commands specs)
 # ----------------------------------------------------------------------------
 
 def _unique_teams():
@@ -293,7 +293,7 @@ def _complete_onoff(name):
 
 
 def command_specs(st, app, refresher):
-    """Build the tui.commands spec list for one (state, app, refresher).
+    """Build the puretui.commands spec list for one (state, app, refresher).
 
     The run closures capture exactly what they need; completion comes
     from the small providers above. Called with Nones only to read the

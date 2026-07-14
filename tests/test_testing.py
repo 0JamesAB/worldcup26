@@ -3,8 +3,8 @@
 import re
 import unittest
 
-from tui.canvas import Canvas
-from tui.testing import (plain_lines, render_plain, styled_lines, mask_text,
+from puretui.canvas import Canvas
+from puretui.testing import (plain_lines, render_plain, styled_lines, mask_text,
                          frames_equal, first_diff)
 
 

@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest import mock
 
-from tui import term
+from puretui import term
 
 
 class DepthCase(unittest.TestCase):

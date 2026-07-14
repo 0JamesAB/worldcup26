@@ -4,7 +4,7 @@ dashboard.py - Self-contained demo of the tui library (v0.4.0 APIs).
 
 A fake "fleet operations" dashboard that composes the new pieces:
 
-    tui.run            frame loop (arrows move the selection, q quits)
+    puretui.run            frame loop (arrows move the selection, q quits)
     Region             local-coordinate, hard-clipped drawing surfaces
     split_v / split_h  flexbox-style layout, straight to child Regions
     at/write/gap       flowing cursor (header badges)
@@ -28,14 +28,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import tui
-from tui import term, widgets
-from tui.canvas import Canvas
-from tui.interact import ListState
-from tui.layout import Fixed, Flex
-from tui.term import BOLD, Key, bg, fg
-from tui.theme import Theme
-from tui.widgets import spinner
+import puretui
+from puretui import term, widgets
+from puretui.canvas import Canvas
+from puretui.interact import ListState
+from puretui.layout import Fixed, Flex
+from puretui.term import BOLD, Key, bg, fg
+from puretui.theme import Theme
+from puretui.widgets import spinner
 
 MIN_COLS, MIN_ROWS = 60, 15
 
@@ -165,7 +165,7 @@ def draw_frame(cols, rows, frame, state):
     sel_name = SERVICES[state.sel][0]
     widgets.footer(footer, 0, 0, footer.w,
                    [("↑↓", "select"), ("q", "quit")],
-                   right=f"{sel_name}  ·  tui {tui.__version__}", theme=t)
+                   right=f"{sel_name}  ·  puretui {puretui.__version__}", theme=t)
     return cv
 
 
@@ -214,7 +214,7 @@ def main(argv):
             state.end()
         return True
 
-    tui.run(render, on_key=on_key, fps=10)
+    puretui.run(render, on_key=on_key, fps=10)
     return 0
 
 

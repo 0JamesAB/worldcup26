@@ -6,7 +6,7 @@ import os
 import threading
 import unittest
 
-from tui import term
+from puretui import term
 
 
 class TestStripAnsi(unittest.TestCase):

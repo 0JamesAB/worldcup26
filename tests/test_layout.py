@@ -2,7 +2,7 @@
 
 import unittest
 
-from tui.layout import Rect, Fixed, Flex, vsplit, hsplit
+from puretui.layout import Rect, Fixed, Flex, vsplit, hsplit
 
 
 class TestRect(unittest.TestCase):

@@ -2,7 +2,7 @@
 
 import unittest
 
-from tui.interact import ListState, ScrollState
+from puretui.interact import ListState, ScrollState
 
 
 class TestListStateBasics(unittest.TestCase):
@@ -224,7 +224,7 @@ if __name__ == "__main__":
 
 class TestHitMap(unittest.TestCase):
     def setUp(self):
-        from tui.interact import HitMap
+        from puretui.interact import HitMap
         self.hm = HitMap()
 
     def test_empty_lookup(self):
@@ -265,7 +265,7 @@ class _FakeMouseEvent:
 
 class TestLineEditTyping(unittest.TestCase):
     def setUp(self):
-        from tui.interact import LineEdit
+        from puretui.interact import LineEdit
         self.ed = LineEdit()
 
     def type_all(self, s):
@@ -277,7 +277,7 @@ class TestLineEditTyping(unittest.TestCase):
         self.assertEqual(self.ed.cursor, 0)
 
     def test_init_text_puts_cursor_at_end(self):
-        from tui.interact import LineEdit
+        from puretui.interact import LineEdit
         ed = LineEdit("abc")
         self.assertEqual(ed.text, "abc")
         self.assertEqual(ed.cursor, 3)
@@ -322,7 +322,7 @@ class TestLineEditTyping(unittest.TestCase):
 
 class TestLineEditEditingKeys(unittest.TestCase):
     def setUp(self):
-        from tui.interact import LineEdit
+        from puretui.interact import LineEdit
         self.ed = LineEdit("abcd")
 
     def test_backspace_at_end(self):
@@ -377,7 +377,7 @@ class TestLineEditEditingKeys(unittest.TestCase):
     def test_key_constants_match_term(self):
         # LineEdit matches literal strings so interact stays term-free;
         # this pins them to the real Key constants.
-        from tui.term import Key
+        from puretui.term import Key
         for k in (Key.LEFT, Key.RIGHT, Key.HOME, Key.END,
                   Key.BACKSPACE, Key.DELETE):
             self.assertTrue(self.ed.handle_key(k))
@@ -385,7 +385,7 @@ class TestLineEditEditingKeys(unittest.TestCase):
 
 class TestLineEditPassthrough(unittest.TestCase):
     def setUp(self):
-        from tui.interact import LineEdit
+        from puretui.interact import LineEdit
         self.ed = LineEdit("abc")
         self.ed.cursor = 1
 

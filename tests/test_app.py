@@ -4,11 +4,11 @@ import inspect
 import unittest
 from unittest import mock
 
-import tui.app
-from tui.app import App, Toast, Toasts, _timeout, run
-from tui.canvas import Canvas
-from tui.region import Region
-from tui.term import Key, MouseEvent
+import puretui.app
+from puretui.app import App, Toast, Toasts, _timeout, run
+from puretui.canvas import Canvas
+from puretui.region import Region
+from puretui.term import Key, MouseEvent
 
 
 class FakeRawTerminal:
@@ -75,7 +75,7 @@ class RunCase(unittest.TestCase):
             return keys.pop(0)
 
         with mock.patch.multiple(
-                tui.app,
+                puretui.app,
                 RawTerminal=FakeRawTerminal,
                 Renderer=FakeRenderer,
                 read_key=fake_read_key,
@@ -148,7 +148,7 @@ class RunCase(unittest.TestCase):
                 return tw
 
             with mock.patch.multiple(
-                    tui.app,
+                    puretui.app,
                     RawTerminal=make_tw,
                     Renderer=FakeRenderer,
                     read_key=fake_read_key,
@@ -173,7 +173,7 @@ class RunCase(unittest.TestCase):
 
 class TestRunSignature(unittest.TestCase):
     def test_importable(self):
-        self.assertTrue(hasattr(tui.app, "run"))
+        self.assertTrue(hasattr(puretui.app, "run"))
         self.assertTrue(callable(run))
 
     def test_params_and_defaults(self):
@@ -442,11 +442,11 @@ class DispatchMouseCase(unittest.TestCase):
 
 
 class ToastsCase(unittest.TestCase):
-    """Toast/Toasts under a controlled clock (tui.app.time is patched)."""
+    """Toast/Toasts under a controlled clock (puretui.app.time is patched)."""
 
     def run_clocked(self, body):
         clock = {"t": 1000.0}
-        with mock.patch.object(tui.app.time, "time", lambda: clock["t"]):
+        with mock.patch.object(puretui.app.time, "time", lambda: clock["t"]):
             body(clock)
 
     def test_toast_fields_and_age(self):
@@ -530,7 +530,7 @@ class AppRunCase(unittest.TestCase):
             return keys.pop(0)
 
         with mock.patch.multiple(
-                tui.app,
+                puretui.app,
                 RawTerminal=FakeRawTerminal,
                 Renderer=FakeRenderer,
                 read_key=fake_read_key,
@@ -635,7 +635,7 @@ class AppRunCase(unittest.TestCase):
             return keys.pop(0)
 
         with mock.patch.multiple(
-                tui.app,
+                puretui.app,
                 RawTerminal=make_tw,
                 Renderer=FakeRenderer,
                 read_key=fake_read_key,
@@ -659,7 +659,7 @@ class AppRunCanvasReuseCase(unittest.TestCase):
             return keys.pop(0)
 
         with mock.patch.multiple(
-                tui.app,
+                puretui.app,
                 RawTerminal=FakeRawTerminal,
                 Renderer=FakeRenderer,
                 read_key=fake_read_key,
@@ -714,7 +714,7 @@ class TestCaptureDropsAllMouse(unittest.TestCase):
     """Regression: wheel events must not bypass an active capture."""
 
     def _app(self):
-        from tui.app import App
+        from puretui.app import App
         app = App()
         self.wheeled = []
         app.add_view("v", lambda rg, a: None,
@@ -723,7 +723,7 @@ class TestCaptureDropsAllMouse(unittest.TestCase):
         return app
 
     def _wheel(self):
-        from tui.term import MouseEvent
+        from puretui.term import MouseEvent
         ev = MouseEvent.__new__(MouseEvent)
         ev.row, ev.col, ev.button, ev.kind = 3, 3, "wheel_down", "wheel"
         return ev
@@ -741,7 +741,7 @@ class TestCaptureDropsAllMouse(unittest.TestCase):
 
     def test_wheel_synthesis_not_fed_to_capture(self):
         # no on_wheel + capture: nothing reaches dispatch_key either
-        from tui.app import App
+        from puretui.app import App
         app = App()
         seen = []
         app.add_view("v", lambda rg, a: None)
@@ -756,7 +756,7 @@ class TestToastPruneRace(unittest.TestCase):
 
     def test_concurrent_add_and_prune(self):
         import threading
-        from tui.app import App
+        from puretui.app import App
         app = App()
         stop = []
 

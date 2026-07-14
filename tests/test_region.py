@@ -2,12 +2,12 @@
 
 import unittest
 
-from tui import term, widgets
-from tui.canvas import Canvas, HEAVY, LIGHT
-from tui.interact import HitMap, ListState, ScrollState
-from tui.layout import Flex, Rect, hsplit, vsplit
-from tui.region import Region
-from tui.styles import Style
+from puretui import term, widgets
+from puretui.canvas import Canvas, HEAVY, LIGHT
+from puretui.interact import HitMap, ListState, ScrollState
+from puretui.layout import Flex, Rect, hsplit, vsplit
+from puretui.region import Region
+from puretui.styles import Style
 
 
 def row_text(cv, y):
@@ -941,7 +941,7 @@ class TestSelectListMatchesViewLive(unittest.TestCase):
         import sys
         import time
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from tui import theme as tui_theme
+        from puretui import theme as tui_theme
         saved = (term.get_color_depth(), tui_theme.get_theme(),
                  os.environ.get("TZ"), os.environ.get("WCUP_ODDS_FORMAT"))
         try:
@@ -1180,8 +1180,8 @@ class TestSelectListHitH(unittest.TestCase):
     in an item's layout height must not be clickable)."""
 
     def test_gap_row_not_clickable(self):
-        from tui.canvas import Canvas
-        from tui.interact import HitMap, ListState
+        from puretui.canvas import Canvas
+        from puretui.interact import HitMap, ListState
         cv = Canvas(20, 12)
         hits = HitMap()
         rg = cv.region(hits=hits)
@@ -1211,8 +1211,8 @@ class TestInputWideChars(unittest.TestCase):
     """Regression: input cursor/scroll are display-width aware."""
 
     def _render(self, text, cursor, w=10, ghost=""):
-        from tui.canvas import Canvas
-        from tui.interact import LineEdit
+        from puretui.canvas import Canvas
+        from puretui.interact import LineEdit
         cv = Canvas(w, 1)
         ed = LineEdit()
         ed.buf = text if hasattr(ed, "buf") else None
@@ -1221,7 +1221,7 @@ class TestInputWideChars(unittest.TestCase):
         for ch in text:
             ed.handle_key(ch)
         while ed.cursor > cursor:
-            from tui.term import Key
+            from puretui.term import Key
             ed.handle_key(Key.LEFT)
         rg = cv.region()
         cx = rg.input(ed, ghost=ghost)
@@ -1250,6 +1250,6 @@ class TestInputWideChars(unittest.TestCase):
         row = cv.grid[0]
         for i, cell in enumerate(row):
             if cell.ch and len(cell.ch) == 1 and not cell.cont:
-                from tui import term as T
+                from puretui import term as T
                 if T.char_width(cell.ch) == 2 and i + 1 < len(row):
                     self.assertTrue(row[i + 1].cont)

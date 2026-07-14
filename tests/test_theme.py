@@ -2,8 +2,8 @@
 
 import unittest
 
-from tui import term, widgets
-from tui.theme import Theme, get_theme, set_theme, presets
+from puretui import term, widgets
+from puretui.theme import Theme, get_theme, set_theme, presets
 
 
 class ThemeCase(unittest.TestCase):
@@ -42,7 +42,7 @@ class TestRegistry(ThemeCase):
 
 class TestThemedWidgets(ThemeCase):
     def test_tab_bar_renders_labels(self):
-        from tui.canvas import Canvas
+        from puretui.canvas import Canvas
         cv = Canvas(40, 1)
         widgets.tab_bar(cv, 0, 0, 40, [("1", "Live"), ("2", "Groups")], 0)
         row = "".join(c.ch for c in cv.grid[0])
@@ -50,7 +50,7 @@ class TestThemedWidgets(ThemeCase):
         self.assertIn("2 Groups", row)
 
     def test_footer_renders_hints(self):
-        from tui.canvas import Canvas
+        from puretui.canvas import Canvas
         cv = Canvas(40, 1)
         widgets.footer(cv, 0, 0, 40, [("q", "quit")], right="v1")
         row = "".join(c.ch for c in cv.grid[0])
@@ -61,8 +61,8 @@ class TestThemedWidgets(ThemeCase):
 
 class TestTabBarExtents(unittest.TestCase):
     def test_extents_match_labels(self):
-        from tui.canvas import Canvas
-        from tui import widgets, term
+        from puretui.canvas import Canvas
+        from puretui import widgets, term
         cv = Canvas(60, 1)
         ext = widgets.tab_bar(cv, 0, 0, 60, [("1", "Live"), ("2", "Groups")], 0)
         self.assertEqual(len(ext), 2)
@@ -77,8 +77,8 @@ class TestTabBarExtents(unittest.TestCase):
 
 class TestTabBarOverflow(unittest.TestCase):
     def test_extents_clipped_to_bar_width(self):
-        from tui.canvas import Canvas
-        from tui import widgets
+        from puretui.canvas import Canvas
+        from puretui import widgets
         cv = Canvas(40, 1)
         # bar is only 14 cols; second tab overflows, third is fully out
         ext = widgets.tab_bar(cv, 0, 0, 14,

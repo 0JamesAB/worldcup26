@@ -1,9 +1,9 @@
-"""Composable Style objects (tui/styles.py)."""
+"""Composable Style objects (puretui/styles.py)."""
 
 import unittest
 
-from tui import term
-from tui.styles import Style
+from puretui import term
+from puretui.styles import Style
 
 
 class StyleCase(unittest.TestCase):

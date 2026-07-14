@@ -17,12 +17,12 @@ from datetime import datetime, timezone
 
 FAR = datetime.max.replace(tzinfo=timezone.utc)
 
-from tui import term
-from tui.app import App
-from tui.canvas import Canvas
-from tui.commands import CommandSet, Palette
-from tui.term import Key
-from tui.theme import set_theme
+from puretui import term
+from puretui.app import App
+from puretui.canvas import Canvas
+from puretui.commands import CommandSet, Palette
+from puretui.term import Key
+from puretui.theme import set_theme
 from palette import WorldCupTheme
 set_theme(WorldCupTheme)
 

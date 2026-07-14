@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tui-core"
+name = "puretui"
 version = "0.6.0.dev0"
 description = "Zero-dependency POSIX terminal UI toolkit: truecolor ANSI with 256/16/mono fallback, raw keyboard input, diff-based renderer, styled canvas, and widgets."
 readme = "README.md"
@@ -24,4 +24,4 @@ Repository = "https://github.com/0JamesAB/puretui"
 [tool.setuptools]
 # Explicit: only the library ships; the World Cup app modules
 # (wc/views/state/espn/palette) stay repo-local.
-packages = ["tui"]
+packages = ["puretui"]

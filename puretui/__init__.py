@@ -1,4 +1,4 @@
-"""tui - zero-dependency POSIX terminal UI toolkit.
+"""puretui - zero-dependency POSIX terminal UI toolkit.
 
 Truecolor ANSI with 256/16-color/mono fallback, width-aware text utilities,
 a styled cell-grid Canvas, raw keyboard input with escape decoding, and
@@ -23,6 +23,6 @@ from .layout import Rect, Fixed, Flex, hsplit, vsplit
 from .interact import ListState, ScrollState, HitMap, LineEdit
 from .styles import Style
 from .app import run, App, Toast, Toasts
-# `tui.style` stays the v0.1.0 term.style() helper function; the Style
+# `puretui.style` stays the v0.1.0 term.style() helper function; the Style
 # class lives in the `styles` module to keep the two names distinct.
 from . import widgets, layout, interact, styles, testing, commands

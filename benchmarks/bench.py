@@ -41,15 +41,15 @@ import threading
 import time
 
 try:
-    import tui
+    import puretui
 except ImportError:
     sys.path.insert(
         0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import tui
+    import puretui
 
-from tui import term, widgets
-from tui.canvas import Canvas
-from tui.theme import get_theme
+from puretui import term, widgets
+from puretui.canvas import Canvas
+from puretui.theme import get_theme
 
 WARMUPS = 5
 REPEATS = 7
@@ -141,7 +141,7 @@ def compose_frame(cols, rows, tick):
            % (tick, cols, rows), dim)
     widgets.footer(cv, rows - 1, 0, cols,
                    [("q", "quit"), ("r", "refresh"), ("tab", "next")],
-                   right="tui %s" % tui.__version__)
+                   right="tui %s" % puretui.__version__)
     return cv
 
 
@@ -362,7 +362,7 @@ def fmt_value(r, key):
 
 def print_table(results, cols, rows):
     print("tui %s benchmark   size=%dx%d   python=%s"
-          % (tui.__version__, cols, rows,
+          % (puretui.__version__, cols, rows,
              ".".join(str(v) for v in sys.version_info[:3])))
     print("%-18s %-15s %-15s %s" % ("scenario", "median", "best", "n/repeat"))
     print("-" * 58)
@@ -390,7 +390,7 @@ def main(argv=None):
 
     if args.json:
         print(json.dumps({
-            "version": tui.__version__,
+            "version": puretui.__version__,
             "python": ".".join(str(v) for v in sys.version_info[:3]),
             "size": {"cols": cols, "rows": rows},
             "smoke": args.smoke,

@@ -28,7 +28,7 @@ The corpus and widths are deterministic so any failure reproduces.
 import random
 import unittest
 
-from tui import term
+from puretui import term
 
 N_CASES = 300
 MAX_W = 40

@@ -22,7 +22,7 @@ import unittest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-from tui.term import Key, strip_ansi
+from puretui.term import Key, strip_ansi
 
 GOLDEN_DIR = os.path.join(REPO, "tests", "goldens")
 GENERATE = os.environ.get("GENERATE_GOLDENS") == "1"

@@ -32,8 +32,8 @@ import time
 import espn
 import state as S
 from palette import WorldCupTheme
-from tui import term
-from tui.theme import set_theme
+from puretui import term
+from puretui.theme import set_theme
 
 FRAME = 41  # render() bumps this to 42 -> live pulse phase is "on"
 

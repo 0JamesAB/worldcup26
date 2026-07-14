@@ -19,9 +19,9 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from tui import term
-from tui import theme as tui_theme
-from tui.term import Key, MouseEvent
+from puretui import term
+from puretui import theme as tui_theme
+from puretui.term import Key, MouseEvent
 
 import fixtures_views as F
 import state as S

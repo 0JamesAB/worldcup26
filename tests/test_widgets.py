@@ -2,10 +2,10 @@
 
 import unittest
 
-from tui import term
-from tui.canvas import Canvas
-from tui.interact import ScrollState
-from tui import widgets
+from puretui import term
+from puretui.canvas import Canvas
+from puretui.interact import ScrollState
+from puretui import widgets
 
 
 def row_text(cv, r):
@@ -144,8 +144,8 @@ class TestDrawTable(unittest.TestCase):
 
 class TestDrawCard(unittest.TestCase):
     def test_frame_title_right_and_inner(self):
-        from tui.canvas import LIGHT
-        from tui.layout import Rect
+        from puretui.canvas import LIGHT
+        from puretui.layout import Rect
         cv = Canvas(30, 4)
         inner = widgets.draw_card(cv, 0, 0, 4, 30, title=" T ", right="FT")
         self.assertEqual(inner.rect, Rect(1, 2, 2, 26))

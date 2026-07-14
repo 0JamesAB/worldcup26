@@ -1,6 +1,6 @@
-"""World Cup color theme on top of tui's neutral base (FIFA-ish)."""
+"""World Cup color theme on top of puretui's neutral base (FIFA-ish)."""
 
-from tui.theme import Theme
+from puretui.theme import Theme
 
 
 class WorldCupTheme(Theme):
