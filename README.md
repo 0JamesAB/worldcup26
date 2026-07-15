@@ -3,7 +3,7 @@
 A terminal dashboard for following the **2026 FIFA World Cup** live — scores,
 goalscorers, lineups, group tables, the knockout bracket, the golden-boot race
 and **win-probability odds** — all in your terminal, updating live, driven
-entirely by the keyboard.
+entirely by the keyboard. Built as a reference implementation for `puretui` (https://github.com/0JamesAB/puretui)
 
 **No dependencies. No API key. Pure Python 3 standard library.** Data (odds
 included) comes from ESPN's public JSON feeds.
